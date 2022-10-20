@@ -18,38 +18,38 @@
 #pragma once
 
 #include "api_vulkan_sample.h"
+#include "geometry/frustum.h"
 
 class ExtendedDynamicState2 : public ApiVulkanSample
 {
   public:
-
-	struct 
+	struct
 	{
-		bool depth_bias_enable = false;
-		bool primitive_restart_enable = false;
-		bool rasterizer_discard_enable = false;
-		int32_t logic_op_index{};
+		bool      depth_bias_enable         = false;
+		bool      primitive_restart_enable  = false;
+		bool      rasterizer_discard_enable = false;
+		int32_t   logic_op_index{};
 		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
-		float patch_control_points_float{};
-		uint32_t patch_control_points{};
-	}gui_settings;
+		float     patch_control_points_float{};
+		uint32_t  patch_control_points{};
+	} gui_settings;
 
 	std::vector<std::string> logic_op_object_names{"CLEAR",
-												   "AND",
-												   "AND_REVERSE",
-												   "COPY",
-												   "AND_INVERTED",
-												   "NO_OP",
-												   "XOR",
-												   "OR",
-												   "NOR",
-												   "EQUIVALENT",
-												   "INVERT",
-												   "OR_REVERSE",
-												   "COPY_INVERTED",
-												   "OR_INVERTED",
-												   "NAND",
-												   "SET"};
+	                                               "AND",
+	                                               "AND_REVERSE",
+	                                               "COPY",
+	                                               "AND_INVERTED",
+	                                               "NO_OP",
+	                                               "XOR",
+	                                               "OR",
+	                                               "NOR",
+	                                               "EQUIVALENT",
+	                                               "INVERT",
+	                                               "OR_REVERSE",
+	                                               "COPY_INVERTED",
+	                                               "OR_INVERTED",
+	                                               "NAND",
+	                                               "SET"};
 
 	struct
 	{
@@ -61,8 +61,12 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		glm::mat4 projection;
 		glm::mat4 modelview;
 		glm::mat4 skybox_modelview;
-		float     modelscale = 0.15f;
-	} ubo_vs;
+		float     modelscale            = 0.15f;
+		float     tessellation_factor   = 0.75f;
+		float     tessellated_edge_size = 20.0f;
+		float     displacement_factor   = 32.0f;
+		glm::vec4 frustum_planes[6];
+	} ubo_tess;
 
 	VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
 	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
@@ -79,6 +83,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	std::unique_ptr<vkb::sg::SubMesh>  skybox;
 	std::unique_ptr<vkb::sg::SubMesh>  object;
 	std::unique_ptr<vkb::core::Buffer> ubo;
+	vkb::Frustum frustum;
 
 	ExtendedDynamicState2();
 	~ExtendedDynamicState2();
@@ -106,7 +111,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	PFN_vkCmdSetPrimitiveRestartEnableEXT  vkCmdSetPrimitiveRestartEnableEXT{VK_NULL_HANDLE};
 	PFN_vkCmdSetRasterizerDiscardEnableEXT vkCmdSetRasterizerDiscardEnableEXT{VK_NULL_HANDLE};
 #endif
-
 };
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2();

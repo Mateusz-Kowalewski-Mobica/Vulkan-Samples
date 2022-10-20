@@ -154,7 +154,7 @@ void ExtendedDynamicState2::render(float delta_time)
  */
 void ExtendedDynamicState2::prepare_uniform_buffers()
 {
-	ubo = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_vs), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	ubo = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_tess), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	update_uniform_buffers();
 }
@@ -165,10 +165,13 @@ void ExtendedDynamicState2::prepare_uniform_buffers()
  */
 void ExtendedDynamicState2::update_uniform_buffers()
 {
-	ubo_vs.projection       = camera.matrices.perspective;
-	ubo_vs.modelview        = camera.matrices.view * glm::mat4(1.f);
-	ubo_vs.skybox_modelview = camera.matrices.view;
-	ubo->convert_and_update(ubo_vs);
+	ubo_tess.projection       = camera.matrices.perspective;
+	ubo_tess.modelview        = camera.matrices.view * glm::mat4(1.f);
+	ubo_tess.skybox_modelview = camera.matrices.view;
+	frustum.update(ubo_tess.projection * ubo_tess.modelview);
+	memcpy(ubo_tess.frustum_planes, frustum.get_planes().data(), sizeof(glm::vec4) * 6);
+
+	ubo->convert_and_update(ubo_tess);
 }
 
 /**
@@ -196,7 +199,7 @@ void ExtendedDynamicState2::create_pipeline()
 {
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_state =
 	    vkb::initializers::pipeline_input_assembly_state_create_info(
-	        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+	        VK_PRIMITIVE_TOPOLOGY_PATCH_LIST,
 	        0,
 	        VK_FALSE);
 
@@ -236,10 +239,12 @@ void ExtendedDynamicState2::create_pipeline()
 	        VK_SAMPLE_COUNT_1_BIT,
 	        0);
 
+	VkPipelineTessellationStateCreateInfo tessellation_state =
+	    vkb::initializers::pipeline_tessellation_state_create_info(2);
+
 	std::vector<VkDynamicState> dynamic_state_enables = {
 	    VK_DYNAMIC_STATE_VIEWPORT,
-	    VK_DYNAMIC_STATE_SCISSOR,
-	    VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT};
+	    VK_DYNAMIC_STATE_SCISSOR};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
 	        dynamic_state_enables.data(),
@@ -254,8 +259,9 @@ void ExtendedDynamicState2::create_pipeline()
 
 	// Attribute descriptions
 	std::vector<VkVertexInputAttributeDescription> vertex_input_attributes = {
-	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),                        // Position
-	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3),        // Normal
+	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),                               // Position
+	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)),        // Normal
+	    vkb::initializers::vertex_input_attribute_description(0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, uv)),
 	};
 
 	VkPipelineVertexInputStateCreateInfo vertex_input_state = vkb::initializers::pipeline_vertex_input_state_create_info();
@@ -264,9 +270,11 @@ void ExtendedDynamicState2::create_pipeline()
 	vertex_input_state.vertexAttributeDescriptionCount      = static_cast<uint32_t>(vertex_input_attributes.size());
 	vertex_input_state.pVertexAttributeDescriptions         = vertex_input_attributes.data();
 
-	std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages{};
-	shader_stages[0] = load_shader("vertex_dynamic_state/gbuffer.vert", VK_SHADER_STAGE_VERTEX_BIT);
-	shader_stages[1] = load_shader("vertex_dynamic_state/gbuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
+	std::array<VkPipelineShaderStageCreateInfo, 4> shader_stages{};
+	shader_stages[0] = load_shader("extended_dynamic_state2/gbuffer.vert", VK_SHADER_STAGE_VERTEX_BIT);
+	shader_stages[1] = load_shader("extended_dynamic_state2/gbuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
+	shader_stages[2] = load_shader("extended_dynamic_state2/gbuffer.tesc", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+	shader_stages[3] = load_shader("extended_dynamic_state2/gbuffer.tese", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
 
 	/* Create graphics pipeline for dynamic rendering */
 	VkFormat color_rendering_format = render_context->get_format();
@@ -291,6 +299,7 @@ void ExtendedDynamicState2::create_pipeline()
 	graphics_create.pDepthStencilState  = &depth_stencil_state;
 	graphics_create.pDynamicState       = &dynamic_state;
 	graphics_create.pVertexInputState   = &vertex_input_state;
+	graphics_create.pTessellationState  = &tessellation_state;
 	graphics_create.stageCount          = static_cast<uint32_t>(shader_stages.size());
 	graphics_create.pStages             = shader_stages.data();
 	graphics_create.layout              = pipeline_layout;
@@ -307,7 +316,7 @@ void ExtendedDynamicState2::create_pipeline()
 	graphics_create.pNext      = VK_NULL_HANDLE;
 	graphics_create.renderPass = render_pass;
 
-	vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &skybox_pipeline);
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &skybox_pipeline));
 	/* Object rendering pipeline */
 	shadertype = 1;
 
@@ -316,7 +325,7 @@ void ExtendedDynamicState2::create_pipeline()
 	depth_stencil_state.depthTestEnable  = VK_TRUE;
 	/* Flip cull mode */
 	rasterization_state.cullMode = VK_CULL_MODE_FRONT_BIT;
-	vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline);
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
 }
 
 /**
@@ -345,29 +354,6 @@ void ExtendedDynamicState2::build_command_buffers()
 		auto command_begin = vkb::initializers::command_buffer_begin_info();
 		VK_CHECK(vkBeginCommandBuffer(draw_cmd_buffer, &command_begin));
 
-		auto draw_scene = [&] {
-			VkViewport viewport = vkb::initializers::viewport((float) width, (float) height, 0.0f, 1.0f);
-			vkCmdSetViewport(draw_cmd_buffer, 0, 1, &viewport);
-
-			VkRect2D scissor = vkb::initializers::rect2D(static_cast<int>(width), static_cast<int>(height), 0, 0);
-			vkCmdSetScissor(draw_cmd_buffer, 0, 1, &scissor);
-
-			/* One descriptor set is used, and the draw type is toggled by a specialization constant */
-			vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
-
-			/* skybox */
-			vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
-			draw_model(skybox, draw_cmd_buffer);
-
-			/* object */
-			vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
-
-			draw_model(object, draw_cmd_buffer);
-
-			/* UI */
-			draw_ui(draw_cmd_buffer);
-		};
-
 		VkImageSubresourceRange range{};
 		range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
 		range.baseMipLevel   = 0;
@@ -383,12 +369,31 @@ void ExtendedDynamicState2::build_command_buffers()
 		render_pass_begin_info.framebuffer              = framebuffers[i];
 		render_pass_begin_info.renderArea.extent.width  = width;
 		render_pass_begin_info.renderArea.extent.height = height;
-		render_pass_begin_info.clearValueCount          = 3;
+		render_pass_begin_info.clearValueCount          = static_cast<uint32_t>(clear_values.size());
 		render_pass_begin_info.pClearValues             = clear_values.data();
 
 		vkCmdBeginRenderPass(draw_cmd_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-		draw_scene();
+		VkViewport viewport = vkb::initializers::viewport((float) width, (float) height, 0.0f, 1.0f);
+		vkCmdSetViewport(draw_cmd_buffer, 0, 1, &viewport);
+
+		VkRect2D scissor = vkb::initializers::rect2D(static_cast<int>(width), static_cast<int>(height), 0, 0);
+		vkCmdSetScissor(draw_cmd_buffer, 0, 1, &scissor);
+
+		/* One descriptor set is used, and the draw type is toggled by a specialization constant */
+		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
+
+		/* skybox */
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
+		draw_model(skybox, draw_cmd_buffer);
+
+		/* object */
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+
+		draw_model(object, draw_cmd_buffer);
+
+		/* UI */
+		draw_ui(draw_cmd_buffer);
 
 		vkCmdEndRenderPass(draw_cmd_buffer);
 
@@ -418,7 +423,9 @@ void ExtendedDynamicState2::create_descriptor_pool()
 void ExtendedDynamicState2::setup_descriptor_set_layout()
 {
 	std::vector<VkDescriptorSetLayoutBinding> set_layout_bindings = {
-	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0),
+	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+													     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, 
+														 0),
 	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1),
 	};
 
@@ -499,6 +506,10 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 		}
 		if (drawer.input_float("Patch Control Points", &gui_settings.patch_control_points_float, 1.0f, 1))
 		{
+			if (gui_settings.patch_control_points_float < 0)
+			{
+				gui_settings.patch_control_points_float = 0;
+			}
 			gui_settings.patch_control_points = (uint32_t) roundf(gui_settings.patch_control_points_float);
 		}
 	}
