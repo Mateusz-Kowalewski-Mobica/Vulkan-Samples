@@ -30,8 +30,8 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		bool      rasterizer_discard_enable = false;
 		int32_t   logic_op_index{};
 		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
-		float     patch_control_points_float{};
-		uint32_t  patch_control_points{};
+		float     patch_control_points_float{4.0f};
+		uint32_t  patch_control_points{4};
 	} gui_settings;
 
 	std::vector<std::string> logic_op_object_names{"CLEAR",
@@ -65,10 +65,29 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		float     tessellation_factor   = 0.75f;
 		float     tessellated_edge_size = 20.0f;
 		float     displacement_factor   = 32.0f;
+		glm::vec2 viewport_dim;
 		glm::vec4 frustum_planes[6];
 	} ubo_tess;
 
-	VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
+	struct
+	{
+		VkDescriptorSetLayout skybox{VK_NULL_HANDLE};
+		VkDescriptorSetLayout model{VK_NULL_HANDLE};
+	} descriptor_set_layouts;
+
+	struct
+	{
+		VkPipelineLayout skybox{VK_NULL_HANDLE};
+		VkPipelineLayout model{VK_NULL_HANDLE};
+	} pipeline_layouts;
+
+	struct
+	{
+		VkDescriptorSet skybox{VK_NULL_HANDLE};
+		VkDescriptorSet model{VK_NULL_HANDLE};
+	} descriptor_sets;
+
+	//VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
 	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
 	VkPipeline                                         skybox_pipeline{VK_NULL_HANDLE};
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT   extended_dynamic_state2_features{};
@@ -76,14 +95,14 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	VkVertexInputBindingDescription2EXT                vertex_bindings_description_ext{};
 	VkVertexInputAttributeDescription2EXT              vertex_attribute_description_ext[2]{};
 
-	VkDescriptorSet       descriptor_set{VK_NULL_HANDLE};
-	VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
+	//VkDescriptorSet       descriptor_set{VK_NULL_HANDLE};
+	//VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
 	VkDescriptorPool      descriptor_pool{VK_NULL_HANDLE};
 
 	std::unique_ptr<vkb::sg::SubMesh>  skybox;
 	std::unique_ptr<vkb::sg::SubMesh>  object;
 	std::unique_ptr<vkb::core::Buffer> ubo;
-	vkb::Frustum frustum;
+	vkb::Frustum                       frustum;
 
 	ExtendedDynamicState2();
 	~ExtendedDynamicState2();

@@ -18,12 +18,14 @@
 
 layout(binding = 1) uniform samplerCube samplerEnvMap;
 
-layout(location = 0) in vec3 inUVW;
-layout(location = 1) in vec3 inPos;
-layout(location = 2) in vec3 inNormal;
+layout(location = 0) in vec2 inUVW;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec3 inPos;
 layout(location = 3) in vec3 inViewVec;
 layout(location = 4) in vec3 inLightVec;
 layout(location = 5) in mat4 inInvModelView;
+
+
 
 layout(location = 0) out vec4 outColor0;
 
@@ -41,7 +43,7 @@ void main()
 	{
 		case 0:        // Skybox
 		{
-			vec3 normal = normalize(inUVW);
+			vec3 normal = normalize(vec3(inUVW, inPos.z));
 			color       = texture(samplerEnvMap, normal);
 		}
 		break;

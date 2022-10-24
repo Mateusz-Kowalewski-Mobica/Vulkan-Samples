@@ -1,4 +1,5 @@
-/* Copyright (c) 2022, Mobica Limited
+#version 450
+/* Copyright (c) 2019, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -14,12 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#version 450
-
-layout(location = 0) in vec3 inPos;
-layout(location = 1) in vec3 inNormal;
-
-layout(constant_id = 0) const int type = 0;
 
 layout(binding = 0) uniform UBO
 {
@@ -30,22 +25,114 @@ layout(binding = 0) uniform UBO
 	float tessellatedEdgeSize;
 	float tessellationFactor;
 	float displacementFactor;
-	vec4 frustumPlanes[6];
-}
-ubo;
+	vec2 viewportDim;
+	vec4  frustumPlanes[6];
+}ubo;
 
-layout(location = 0) out vec3 outUVW;
-layout(location = 1) out vec3 outPos;
-layout(location = 2) out vec3 outNormal;
-layout(location = 3) out vec3 outViewVec;
-layout(location = 4) out vec3 outLightVec;
-layout(location = 5) out mat4 outInvModelView;
+//layout(set = 0, binding = 1) uniform sampler2D samplerHeight;
 
-out gl_PerVertex
+layout (vertices = 4) out;
+ 
+layout (location = 0) in vec2 inUV[];
+layout (location = 1) in vec3 inNormal[];
+layout (location = 2) in vec3 inPos[];
+
+ 
+layout (location = 0) out vec2 outUV[4];
+layout (location = 1) out vec3 outNormal[4];
+layout (location = 2) out vec3 outPos[4];
+
+ 
+// Calculate the tessellation factor based on screen space
+// dimensions of the edge
+float screenSpaceTessFactor(vec4 p0, vec4 p1)
 {
-	vec4 gl_Position;
-};
+	// Calculate edge mid point
+	vec4 midPoint = 0.5 * (p0 + p1);
+	// Sphere radius as distance between the control points
+	float radius = distance(p0, p1) / 2.0;
+
+	// View space
+	vec4 v0 = ubo.modelview  * midPoint;
+
+	// Project into clip space
+	vec4 clip0 = (ubo.projection * (v0 - vec4(radius, vec3(0.0))));
+	vec4 clip1 = (ubo.projection * (v0 + vec4(radius, vec3(0.0))));
+
+	// Get normalized device coordinates
+	clip0 /= clip0.w;
+	clip1 /= clip1.w;
+
+	// Convert to viewport coordinates
+	clip0.xy *= ubo.viewportDim;
+	clip1.xy *= ubo.viewportDim;
+	
+	// Return the tessellation factor based on the screen size 
+	// given by the distance of the two edge control points in screen space
+	// and a reference (min.) tessellation size for the edge set by the application
+	return clamp(distance(clip0, clip1) / ubo.tessellatedEdgeSize * ubo.tessellationFactor, 1.0, 64.0);
+}
+
+// Checks the current's patch visibility against the frustum using a sphere check
+// Sphere radius is given by the patch size
+bool frustumCheck()
+{
+	// Fixed radius (increase if patch size is increased in example)
+	const float radius = 8.0f;
+	vec4 pos = gl_in[gl_InvocationID].gl_Position;
+	
+
+	// Check sphere against frustum planes
+	for (int i = 0; i < 6; i++) {
+		if (dot(pos, ubo.frustumPlanes[i]) + radius < 0.0)
+		{
+			return false;
+		}
+	}
+	return true;
+}
 
 void main()
 {
-}
+	if (gl_InvocationID == 0)
+	{
+		if (!frustumCheck())
+		{
+			gl_TessLevelInner[0] = 0.0;
+			gl_TessLevelInner[1] = 0.0;
+			gl_TessLevelOuter[0] = 0.0;
+			gl_TessLevelOuter[1] = 0.0;
+			gl_TessLevelOuter[2] = 0.0;
+			gl_TessLevelOuter[3] = 0.0;
+		}
+		else
+		{
+			if (ubo.tessellationFactor > 0.0)
+			{
+				gl_TessLevelOuter[0] = screenSpaceTessFactor(gl_in[3].gl_Position, gl_in[0].gl_Position);
+				gl_TessLevelOuter[1] = screenSpaceTessFactor(gl_in[0].gl_Position, gl_in[1].gl_Position);
+				gl_TessLevelOuter[2] = screenSpaceTessFactor(gl_in[1].gl_Position, gl_in[2].gl_Position);
+				gl_TessLevelOuter[3] = screenSpaceTessFactor(gl_in[2].gl_Position, gl_in[3].gl_Position);
+				gl_TessLevelInner[0] = mix(gl_TessLevelOuter[0], gl_TessLevelOuter[3], 0.5);
+				gl_TessLevelInner[1] = mix(gl_TessLevelOuter[2], gl_TessLevelOuter[1], 0.5);
+			}
+			else
+			{
+				// Tessellation factor can be set to zero by example
+				// to demonstrate a simple passthrough
+				gl_TessLevelInner[0] = 1.0;
+				gl_TessLevelInner[1] = 1.0;
+				gl_TessLevelOuter[0] = 1.0;
+				gl_TessLevelOuter[1] = 1.0;
+				gl_TessLevelOuter[2] = 1.0;
+				gl_TessLevelOuter[3] = 1.0;
+			}
+		}
+
+	}
+
+	gl_out[gl_InvocationID].gl_Position =  gl_in[gl_InvocationID].gl_Position;
+	outNormal[gl_InvocationID] = inNormal[gl_InvocationID];
+	outUV[gl_InvocationID] = inUV[gl_InvocationID];
+	outPos[gl_InvocationID] = inPos[gl_InvocationID];
+} 
