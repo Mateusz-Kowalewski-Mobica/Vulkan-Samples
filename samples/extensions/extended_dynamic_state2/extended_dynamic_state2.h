@@ -28,6 +28,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		bool      depth_bias_enable         = false;
 		bool      primitive_restart_enable  = false;
 		bool      rasterizer_discard_enable = false;
+		bool	  tessellation = false;
 		int32_t   logic_op_index{};
 		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
 		float     patch_control_points_float{4.0f};
@@ -62,11 +63,19 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		glm::mat4 modelview;
 		glm::mat4 skybox_modelview;
 		float     modelscale            = 0.15f;
-		float     tessellation_factor   = 0.75f;
-		float     tessellated_edge_size = 20.0f;
-		float     displacement_factor   = 32.0f;
-		glm::vec2 viewport_dim;
+	} ubo_vs;
+
+	struct UBOTESS
+	{
+		glm::mat4 projection;
+		glm::mat4 modelview;
+		glm::vec4 light_pos = glm::vec4(-48.0f, -40.0f, 46.0f, 0.0f);
 		glm::vec4 frustum_planes[6];
+		float     displacement_factor = 32.0f;
+		float     tessellation_factor = 0.75f;
+		glm::vec2 viewport_dim;
+		// Desired size of tessellated quad patch edge
+		float tessellated_edge_size = 20.0f;
 	} ubo_tess;
 
 	struct
@@ -87,6 +96,12 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		VkDescriptorSet model{VK_NULL_HANDLE};
 	} descriptor_sets;
 
+	struct
+	{
+		std::unique_ptr<vkb::core::Buffer> model_tessellation;
+		std::unique_ptr<vkb::core::Buffer> skybox;
+	} uniform_buffers;
+
 	//VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
 	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
 	VkPipeline                                         skybox_pipeline{VK_NULL_HANDLE};
@@ -101,7 +116,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	std::unique_ptr<vkb::sg::SubMesh>  skybox;
 	std::unique_ptr<vkb::sg::SubMesh>  object;
-	std::unique_ptr<vkb::core::Buffer> ubo;
 	vkb::Frustum                       frustum;
 
 	ExtendedDynamicState2();

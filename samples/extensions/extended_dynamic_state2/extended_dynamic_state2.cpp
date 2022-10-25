@@ -33,7 +33,8 @@ ExtendedDynamicState2::~ExtendedDynamicState2()
 		textures = {};
 		skybox.reset();
 		object.reset();
-		ubo.reset();
+		uniform_buffers.skybox.reset();
+		uniform_buffers.model_tessellation.reset();
 
 		vkDestroyPipeline(get_device().get_handle(), model_pipeline, VK_NULL_HANDLE);
 		vkDestroyPipeline(get_device().get_handle(), skybox_pipeline, VK_NULL_HANDLE);
@@ -156,8 +157,8 @@ void ExtendedDynamicState2::render(float delta_time)
  */
 void ExtendedDynamicState2::prepare_uniform_buffers()
 {
-	ubo = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_tess), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
+	uniform_buffers.skybox             = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_vs), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	uniform_buffers.model_tessellation = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_tess), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	update_uniform_buffers();
 }
 
@@ -167,14 +168,35 @@ void ExtendedDynamicState2::prepare_uniform_buffers()
  */
 void ExtendedDynamicState2::update_uniform_buffers()
 {
-	ubo_tess.projection       = camera.matrices.perspective;
-	ubo_tess.modelview        = camera.matrices.view * glm::mat4(1.f);
-	ubo_tess.skybox_modelview = camera.matrices.view;
-	ubo_tess.viewport_dim     = glm::vec2((float) width, (float) height);
+	ubo_vs.projection       = camera.matrices.perspective;
+	ubo_vs.modelview        = camera.matrices.view * glm::mat4(1.f);
+	ubo_vs.skybox_modelview = camera.matrices.view;
+
+	uniform_buffers.skybox->convert_and_update(ubo_vs);
+
+	// Tessellation
+
+	ubo_tess.projection   = camera.matrices.perspective;
+	ubo_tess.modelview    = camera.matrices.view * glm::mat4(1.0f);
+	ubo_tess.light_pos.y  = -0.5f - ubo_tess.displacement_factor;        // todo: Not uesed yet
+	ubo_tess.viewport_dim = glm::vec2((float) width, (float) height);
+
 	frustum.update(ubo_tess.projection * ubo_tess.modelview);
 	memcpy(ubo_tess.frustum_planes, frustum.get_planes().data(), sizeof(glm::vec4) * 6);
 
-	ubo->convert_and_update(ubo_tess);
+	float saved_factor = ubo_tess.tessellation_factor;
+	if (!gui_settings.tessellation)
+	{
+		// Setting this to zero sets all tessellation factors to 1.0 in the shader
+		ubo_tess.tessellation_factor = 0.0f;
+	}
+
+	uniform_buffers.model_tessellation->convert_and_update(ubo_tess);
+
+	if (!gui_settings.tessellation)
+	{
+		ubo_tess.tessellation_factor = saved_factor;
+	}
 }
 
 /**
@@ -261,8 +283,8 @@ void ExtendedDynamicState2::create_pipeline()
 	};
 
 	// Attribute descriptions
-		std::vector<VkVertexInputAttributeDescription> vertex_input_attributes = {
-	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),               // Position
+	std::vector<VkVertexInputAttributeDescription> vertex_input_attributes = {
+	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),           // Position
 	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)),        // Normal
 	};
 
@@ -320,29 +342,30 @@ void ExtendedDynamicState2::create_pipeline()
 	/* Object rendering pipeline */
 	// shadertype = 1;
 	graphics_create.pTessellationState = &tessellation_state;
-	graphics_create.layout              = pipeline_layouts.model;
+	graphics_create.layout             = pipeline_layouts.model;
 	input_assembly_state.topology      = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
 	// Attribute description
-		std::vector<VkVertexInputAttributeDescription> vertex_input_attributes_2 = {
-	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)),               // Position
-	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)), 
-		vkb::initializers::vertex_input_attribute_description(0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),        // Normal
+	std::vector<VkVertexInputAttributeDescription> vertex_input_attributes_2 = {
+	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)),        // Position
+	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)),
+	    vkb::initializers::vertex_input_attribute_description(0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),        // Normal
 	};
-	
-	vertex_input_state.vertexAttributeDescriptionCount      = static_cast<uint32_t>(vertex_input_attributes_2.size());
-	vertex_input_state.pVertexAttributeDescriptions         = vertex_input_attributes_2.data();
+
+	vertex_input_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_input_attributes_2.size());
+	vertex_input_state.pVertexAttributeDescriptions    = vertex_input_attributes_2.data();
 
 	shader_stages[0]           = load_shader("extended_dynamic_state2/gbuffer.vert", VK_SHADER_STAGE_VERTEX_BIT);
 	shader_stages[1]           = load_shader("extended_dynamic_state2/gbuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
 	shader_stages[2]           = load_shader("extended_dynamic_state2/gbuffer.tesc", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
 	shader_stages[3]           = load_shader("extended_dynamic_state2/gbuffer.tese", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
 	graphics_create.stageCount = static_cast<uint32_t>(shader_stages.size());
+	graphics_create.pStages    = shader_stages.data();
 	/* Enable depth test and write */
 	depth_stencil_state.depthWriteEnable = VK_TRUE;
 	depth_stencil_state.depthTestEnable  = VK_TRUE;
 	/* Flip cull mode */
 	rasterization_state.cullMode = VK_CULL_MODE_FRONT_BIT;
-	//VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
 }
 
 /**
@@ -407,10 +430,10 @@ void ExtendedDynamicState2::build_command_buffers()
 		draw_model(skybox, draw_cmd_buffer);
 
 		/* object */
-		//vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.model, 0, 1, &descriptor_sets.model, 0, nullptr);
-		//vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.model, 0, 1, &descriptor_sets.model, 0, nullptr);
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
 
-		//draw_model(object, draw_cmd_buffer);
+		draw_model(object, draw_cmd_buffer);
 
 		/* UI */
 		draw_ui(draw_cmd_buffer);
@@ -462,6 +485,29 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &pipeline_layouts.skybox));
 
 	/* Dodać wersję dla modelu */
+
+	// Terrain
+	set_layout_bindings =
+	    {
+	        // Binding 0 : Shared Tessellation shader ubo
+	        vkb::initializers::descriptor_set_layout_binding(
+	            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	            VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+	            0),
+	        // Binding 3 : Terrain texture array layers
+	        vkb::initializers::descriptor_set_layout_binding(
+	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	            VK_SHADER_STAGE_FRAGMENT_BIT,
+	            1),
+	    };
+
+	descriptor_layout_create_info.pBindings    = set_layout_bindings.data();
+	descriptor_layout_create_info.bindingCount = static_cast<uint32_t>(set_layout_bindings.size());
+	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.model));
+
+	pipeline_layout_create_info.pSetLayouts    = &descriptor_set_layouts.model;
+	pipeline_layout_create_info.setLayoutCount = 1;
+	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &pipeline_layouts.model));
 }
 
 /**
@@ -480,16 +526,31 @@ void ExtendedDynamicState2::create_descriptor_sets()
 
 	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.skybox));
 
-	VkDescriptorBufferInfo            matrix_buffer_descriptor     = create_descriptor(*ubo);
+	VkDescriptorBufferInfo            matrix_buffer_descriptor     = create_descriptor(*uniform_buffers.skybox);
 	VkDescriptorImageInfo             environment_image_descriptor = create_descriptor(textures.envmap);
 	std::vector<VkWriteDescriptorSet> write_descriptor_sets        = {
         vkb::initializers::write_descriptor_set(descriptor_sets.skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &matrix_buffer_descriptor),
         vkb::initializers::write_descriptor_set(descriptor_sets.skybox, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &environment_image_descriptor),
-    };	
+    };
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
 	/* Dodac wersje dla modelu*/
-}
 
+	alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &descriptor_set_layouts.model, 1);
+
+	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.model));
+
+	VkDescriptorBufferInfo model_buffer_descriptor = create_descriptor(*uniform_buffers.model_tessellation);
+	write_descriptor_sets =
+	    {
+	        // Binding 0 : Shared tessellation shader ubo
+	        vkb::initializers::write_descriptor_set(
+	            descriptor_sets.model,
+	            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	            0,
+	            &model_buffer_descriptor),
+	    };
+	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, NULL);
+}
 
 void ExtendedDynamicState2::request_gpu_features(vkb::PhysicalDevice &gpu)
 {
@@ -530,6 +591,10 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 			update_uniform_buffers();
 		}
 		if (drawer.checkbox("Rasterizer Discard Enable", &gui_settings.rasterizer_discard_enable))
+		{
+			update_uniform_buffers();
+		}
+		if (drawer.checkbox("Tessellation Enable", &gui_settings.tessellation))
 		{
 			update_uniform_buffers();
 		}
