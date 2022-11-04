@@ -183,7 +183,7 @@ void ExtendedDynamicState2::update_uniform_buffers()
 
 	frustum.update(ubo_tess.projection * ubo_tess.modelview);
 	memcpy(ubo_tess.frustum_planes, frustum.get_planes().data(), sizeof(glm::vec4) * 6);
-
+	ubo_tess.tessellation_factor = gui_settings.tess_factor;
 	float saved_factor = ubo_tess.tessellation_factor;
 	if (!gui_settings.tessellation)
 	{
@@ -252,8 +252,8 @@ void ExtendedDynamicState2::create_pipeline()
 	/* Note: Using Reversed depth-buffer for increased precision, so Greater depth values are kept */
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_state =
 	    vkb::initializers::pipeline_depth_stencil_state_create_info(
-	        VK_FALSE,
-	        VK_FALSE,
+	        VK_TRUE, /* changed */
+	        VK_TRUE,
 	        VK_COMPARE_OP_GREATER);
 
 	VkPipelineViewportStateCreateInfo viewport_state =
@@ -269,7 +269,8 @@ void ExtendedDynamicState2::create_pipeline()
 
 	std::vector<VkDynamicState> dynamic_state_enables = {
 	    VK_DYNAMIC_STATE_VIEWPORT,
-	    VK_DYNAMIC_STATE_SCISSOR};
+	    VK_DYNAMIC_STATE_SCISSOR,
+	};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
 	        dynamic_state_enables.data(),
@@ -338,21 +339,29 @@ void ExtendedDynamicState2::create_pipeline()
 	graphics_create.pNext      = VK_NULL_HANDLE;
 	graphics_create.renderPass = render_pass;
 
-	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &skybox_pipeline));
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &graphics_create, VK_NULL_HANDLE, &skybox_pipeline));
 	/* Object rendering pipeline */
 	// shadertype = 1;
 	graphics_create.pTessellationState = &tessellation_state;
 	graphics_create.layout             = pipeline_layouts.model;
 	input_assembly_state.topology      = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+	dynamic_state_enables.push_back(VK_DYNAMIC_STATE_PATCH_CONTROL_POINTS_EXT);
+	dynamic_state.pDynamicStates    = dynamic_state_enables.data();
+	dynamic_state.dynamicStateCount = static_cast<uint32_t>(dynamic_state_enables.size());
+
 	// Attribute description
 	std::vector<VkVertexInputAttributeDescription> vertex_input_attributes_2 = {
-	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)),        // Position
+	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),        // Position
 	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)),
-	    vkb::initializers::vertex_input_attribute_description(0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),        // Normal
+	    vkb::initializers::vertex_input_attribute_description(0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)),        // Normal
 	};
 
 	vertex_input_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_input_attributes_2.size());
 	vertex_input_state.pVertexAttributeDescriptions    = vertex_input_attributes_2.data();
+	if (get_device().get_gpu().get_features().fillModeNonSolid)
+	{
+		rasterization_state.polygonMode = VK_POLYGON_MODE_LINE;//VK_POLYGON_MODE_LINE; /* Wireframe mode */
+	}
 
 	shader_stages[0]           = load_shader("extended_dynamic_state2/gbuffer.vert", VK_SHADER_STAGE_VERTEX_BIT);
 	shader_stages[1]           = load_shader("extended_dynamic_state2/gbuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -365,7 +374,7 @@ void ExtendedDynamicState2::create_pipeline()
 	depth_stencil_state.depthTestEnable  = VK_TRUE;
 	/* Flip cull mode */
 	rasterization_state.cullMode = VK_CULL_MODE_FRONT_BIT;
-	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), VK_NULL_HANDLE, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
 }
 
 /**
@@ -423,15 +432,15 @@ void ExtendedDynamicState2::build_command_buffers()
 		/* One descriptor set is used, and the draw type is toggled by a specialization constant */
 		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.skybox, 0, 1, &descriptor_sets.skybox, 0, nullptr);
 
-		vkCmdSetPatchControlPointsEXT(draw_cmd_buffer, gui_settings.patch_control_points);
-
 		/* skybox */
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
-		draw_model(skybox, draw_cmd_buffer);
+
+		//draw_model(skybox, draw_cmd_buffer);
 
 		/* object */
 		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.model, 0, 1, &descriptor_sets.model, 0, nullptr);
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+		vkCmdSetPatchControlPointsEXT(draw_cmd_buffer, gui_settings.patch_control_points);
 
 		draw_model(object, draw_cmd_buffer);
 
@@ -451,11 +460,15 @@ void ExtendedDynamicState2::build_command_buffers()
 void ExtendedDynamicState2::create_descriptor_pool()
 {
 	std::vector<VkDescriptorPoolSize> pool_sizes = {
-	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2),
-	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2)};
-	uint32_t                   num_descriptor_sets = 4;
+	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3),
+	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3)};
+
 	VkDescriptorPoolCreateInfo descriptor_pool_create_info =
-	    vkb::initializers::descriptor_pool_create_info(static_cast<uint32_t>(pool_sizes.size()), pool_sizes.data(), num_descriptor_sets);
+	    vkb::initializers::descriptor_pool_create_info(
+	        static_cast<uint32_t>(pool_sizes.size()),
+	        pool_sizes.data(),
+	        2);
+
 	VK_CHECK(vkCreateDescriptorPool(get_device().get_handle(), &descriptor_pool_create_info, nullptr, &descriptor_pool));
 }
 
@@ -499,6 +512,11 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 	            VK_SHADER_STAGE_FRAGMENT_BIT,
 	            1),
+	        // Binding 1 : Height map
+	        vkb::initializers::descriptor_set_layout_binding(
+	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	            VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	            2),
 	    };
 
 	descriptor_layout_create_info.pBindings    = set_layout_bindings.data();
@@ -540,6 +558,8 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.model));
 
 	VkDescriptorBufferInfo model_buffer_descriptor = create_descriptor(*uniform_buffers.model_tessellation);
+
+
 	write_descriptor_sets =
 	    {
 	        // Binding 0 : Shared tessellation shader ubo
@@ -548,6 +568,11 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	            0,
 	            &model_buffer_descriptor),
+
+			vkb::initializers::write_descriptor_set(
+				descriptor_sets.model,
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				1, &environment_image_descriptor),
 	    };
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, NULL);
 }
@@ -570,6 +595,11 @@ void ExtendedDynamicState2::request_gpu_features(vkb::PhysicalDevice &gpu)
 	else
 	{
 		throw vkb::VulkanException(VK_ERROR_FEATURE_NOT_PRESENT, "Selected GPU does not support tessellation shaders!");
+	}
+
+	if (gpu.get_features().fillModeNonSolid)
+	{
+		requested_features.fillModeNonSolid = VK_TRUE;
 	}
 
 	if (gpu.get_features().samplerAnisotropy)
@@ -598,11 +628,9 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 		{
 			update_uniform_buffers();
 		}
-		if (drawer.combo_box("Logic type", &gui_settings.logic_op_index, logic_op_object_names))
+		if (drawer.input_float("Tessellation Factor", &gui_settings.tess_factor, 1.0f, 1))
 		{
-			gui_settings.logicOp = (VkLogicOp) gui_settings.logic_op_index;
 			update_uniform_buffers();
-			build_command_buffers();
 		}
 		if (drawer.input_float("Patch Control Points", &gui_settings.patch_control_points_float, 1.0f, 1))
 		{
@@ -612,6 +640,13 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 			}
 			gui_settings.patch_control_points = (uint32_t) roundf(gui_settings.patch_control_points_float);
 		}
+		if (drawer.combo_box("Logic type", &gui_settings.logic_op_index, logic_op_object_names))
+		{
+			gui_settings.logicOp = (VkLogicOp) gui_settings.logic_op_index;
+			update_uniform_buffers();
+			build_command_buffers();
+		}
+
 	}
 }
 

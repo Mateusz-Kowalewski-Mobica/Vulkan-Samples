@@ -29,6 +29,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		bool      primitive_restart_enable  = false;
 		bool      rasterizer_discard_enable = false;
 		bool	  tessellation = false;
+		float	  tess_factor = 1.0;
 		int32_t   logic_op_index{};
 		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
 		float     patch_control_points_float{4.0f};
@@ -55,6 +56,8 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	struct
 	{
 		Texture envmap;
+		Texture terrain;
+		Texture displace;
 	} textures;
 
 	struct UBOVS
@@ -76,6 +79,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		glm::vec2 viewport_dim;
 		// Desired size of tessellated quad patch edge
 		float tessellated_edge_size = 20.0f;
+		float     modelscale            = 0.15f;
 	} ubo_tess;
 
 	struct

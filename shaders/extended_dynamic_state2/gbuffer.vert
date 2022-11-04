@@ -1,4 +1,5 @@
-/* Copyright (c) 2022, Mobica Limited
+#version 450
+/* Copyright (c) 2019, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -14,56 +15,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#version 450
 
-layout(location = 0) in vec2 inUV;
-layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inPos;
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec2 inUV;
 
-layout(constant_id = 0) const int type = 0;
 
-layout(binding = 0) uniform UBO
+layout (location = 0) out vec3 outPos;
+layout (location = 1) out vec3 outNormal;
+layout (location = 2) out vec2 outUV;
+
+layout (set = 0, binding = 0) uniform UBO 
 {
-	mat4  projection;
-	mat4  modelview;
-	mat4  skybox_modelview;
-	float modelscale;
-	float tessellatedEdgeSize;
-	float tessellationFactor;
+	mat4 projection;
+	mat4 modelview;
+	vec4 lightPos;
+	vec4 frustumPlanes[6];
 	float displacementFactor;
+	float tessellationFactor;
 	vec2 viewportDim;
-	vec4  frustumPlanes[6];
-}ubo;
+	float tessellatedEdgeSize;
+	float modelscale;
+} ubo; 
 
-layout(location = 0) out vec2 outUV;
-layout(location = 1) out vec3 outNormal;
-layout(location = 2) out vec3 outPos;
-
-// out gl_PerVertex
-// {
-// 	vec4 gl_Position;
-// };
-
-void main()
+void main(void)
 {
-	outUV = inUV;
-	vec3 outPos;
-	switch (type)
-	{
-		case 0:        // Skybox
-			outPos      = vec3(mat3(ubo.skybox_modelview) * inPos);
-			gl_Position = vec4(ubo.projection * vec4(outPos, 1.0));
-			break;
-		case 1:        // Object
-			outPos      = vec3(ubo.modelview * vec4(inPos * ubo.modelscale, 1.0));
-			gl_Position = ubo.projection * ubo.modelview * vec4(inPos.xyz * ubo.modelscale, 1.0);
-			break;
-	}
-	outNormal = inNormal;
-
-	// outInvModelView = inverse(ubo.skybox_modelview);
-
-	// vec3 lightPos = vec3(0.0f, -5.0f, 5.0f);
-	// outLightVec   = lightPos.xyz - outPos.xyz;
-	// outViewVec    = -outPos.xyz;
+	gl_Position = /*ubo.projection * ubo.modelview * */vec4(inPos, 1.0);
+	outNormal = mat3(ubo.modelview) * inNormal;
+	outUV = outUV;
+	outPos = inPos;
+	
+	
+	
+	
 }
