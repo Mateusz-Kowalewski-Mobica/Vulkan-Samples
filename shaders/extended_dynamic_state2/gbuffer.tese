@@ -30,7 +30,7 @@ layout (set = 0, binding = 0) uniform UBO
 } ubo; 
 
 //layout (set = 0, binding = 1) uniform sampler2D displacementMap; 
-layout(quads, equal_spacing, cw) in;
+layout(triangles, equal_spacing, cw) in;
 
 layout (location = 0) in vec3 inPos[];
 layout (location = 1) in vec3 inNormal[];
@@ -82,13 +82,13 @@ vec4 interpolate3D(vec4 v0, vec4 v1, vec4 v2)
 void main()
 {
 	// Interpolate UV coordinates
-	//outUV = interpolate3D(inUV[0], inUV[1], inUV[2]);
+	outUV = interpolate3D(inUV[0], inUV[1], inUV[2]);
 
-	//outNormal = interpolate3D(inNormal[0], inNormal[1], inNormal[2]);
+	outNormal = interpolate3D(inNormal[0], inNormal[1], inNormal[2]);
 
-	vec4 pos = interpolate(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_in[2].gl_Position, gl_in[3].gl_Position);
-	outUV = interpolate(inUV[0], inUV[1], inUV[2], inUV[3]);
-	outNormal = interpolate(inNormal[0], inNormal[1], inNormal[2], inNormal[3]);
+	//vec4 pos = interpolate(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_in[2].gl_Position, gl_in[3].gl_Position);
+	//outUV = interpolate(inUV[0], inUV[1], inUV[2], inUV[3]);
+	//outNormal = interpolate(inNormal[0], inNormal[1], inNormal[2], inNormal[3]);
 
 	// // Interpolate positions
 
@@ -110,7 +110,7 @@ void main()
     // vec4 p1 = (p11 - p10) * u + p10;
     // vec4 pos = (p1 - p0) * v + p0;
 
-//	vec4 pos = interpolate3D(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_in[2].gl_Position);
+	vec4 pos = interpolate3D(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_in[2].gl_Position);
 	
 	// Displace
 	// pos.y -= textureLod(displacementMap, outUV, 0.0).r * ubo.displacementFactor;
