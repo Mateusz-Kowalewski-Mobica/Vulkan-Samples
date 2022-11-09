@@ -17,14 +17,28 @@
 #version 450
 
 
-layout(location = 0) in vec3 inUVW;
-layout(location = 1) in vec3 inPos;
-layout(location = 2) in vec3 inNormal;
+layout(location = 0) in vec3 inPos;
+layout(location = 1) in vec3 inNormal;
 
 layout(location = 0) out vec4 outColor0;
 
+layout(constant_id = 0) const int type = 0;
 
 void main()
 {
-	outColor0.rgb        = vec3(1,1,1);
+    switch (type)
+	{
+        case 0:
+        {
+	        outColor0.rgb        = vec3(0.7569, 0.098, 0.098);
+            break;
+        }
+
+        case 1:
+        {
+	        outColor0.rgb        = vec3(0.1412, 0.7569, 0.2549);
+            break;
+        }
+    }
+
 }

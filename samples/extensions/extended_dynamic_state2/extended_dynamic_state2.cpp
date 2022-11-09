@@ -184,7 +184,7 @@ void ExtendedDynamicState2::update_uniform_buffers()
 	frustum.update(ubo_tess.projection * ubo_tess.modelview);
 	memcpy(ubo_tess.frustum_planes, frustum.get_planes().data(), sizeof(glm::vec4) * 6);
 	ubo_tess.tessellation_factor = gui_settings.tess_factor;
-	float saved_factor = ubo_tess.tessellation_factor;
+	float saved_factor           = ubo_tess.tessellation_factor;
 	if (!gui_settings.tessellation)
 	{
 		// Setting this to zero sets all tessellation factors to 1.0 in the shader
@@ -230,10 +230,12 @@ void ExtendedDynamicState2::create_pipeline()
 
 	VkPipelineRasterizationStateCreateInfo rasterization_state =
 	    vkb::initializers::pipeline_rasterization_state_create_info(
-	        VK_POLYGON_MODE_FILL,
+	        VK_POLYGON_MODE_LINE,
 	        VK_CULL_MODE_BACK_BIT,
 	        VK_FRONT_FACE_COUNTER_CLOCKWISE,
 	        0);
+
+	rasterization_state.depthBiasConstantFactor = -20.0;
 
 	VkPipelineColorBlendAttachmentState blend_attachment_state =
 	    vkb::initializers::pipeline_color_blend_attachment_state(
@@ -270,6 +272,7 @@ void ExtendedDynamicState2::create_pipeline()
 	std::vector<VkDynamicState> dynamic_state_enables = {
 	    VK_DYNAMIC_STATE_VIEWPORT,
 	    VK_DYNAMIC_STATE_SCISSOR,
+		VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT,
 	};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
@@ -295,7 +298,7 @@ void ExtendedDynamicState2::create_pipeline()
 	vertex_input_state.vertexAttributeDescriptionCount      = static_cast<uint32_t>(vertex_input_attributes.size());
 	vertex_input_state.pVertexAttributeDescriptions         = vertex_input_attributes.data();
 
-	std::array<VkPipelineShaderStageCreateInfo, 4> shader_stages{};
+	std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages{};
 	shader_stages[0] = load_shader("extended_dynamic_state2/depthbias.vert", VK_SHADER_STAGE_VERTEX_BIT);
 	shader_stages[1] = load_shader("extended_dynamic_state2/depthbias.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
 
@@ -310,6 +313,15 @@ void ExtendedDynamicState2::create_pipeline()
 	pipeline_create.depthAttachmentFormat   = depth_format;
 	pipeline_create.stencilAttachmentFormat = depth_format;
 
+	/* Skybox pipeline (background cube) */
+	VkSpecializationInfo                    specialization_info;
+	std::array<VkSpecializationMapEntry, 1> specialization_map_entries{};
+	specialization_map_entries[0]        = vkb::initializers::specialization_map_entry(0, 0, sizeof(uint32_t));
+	uint32_t shadertype                  = 0;
+	specialization_info                  = vkb::initializers::specialization_info(1, specialization_map_entries.data(), sizeof(shadertype), &shadertype);
+	shader_stages[0].pSpecializationInfo = &specialization_info;
+	shader_stages[1].pSpecializationInfo = &specialization_info;
+
 	/* Use the pNext to point to the rendering create struct */
 	VkGraphicsPipelineCreateInfo graphics_create{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
 	graphics_create.pNext               = VK_NULL_HANDLE;
@@ -322,8 +334,8 @@ void ExtendedDynamicState2::create_pipeline()
 	graphics_create.pDepthStencilState  = &depth_stencil_state;
 	graphics_create.pDynamicState       = &dynamic_state;
 	graphics_create.pVertexInputState   = &vertex_input_state;
-	graphics_create.pTessellationState  = VK_NULL_HANDLE;        //&tessellation_state;
-	graphics_create.stageCount          = 2;
+	graphics_create.pTessellationState  = VK_NULL_HANDLE;
+	graphics_create.stageCount          = static_cast<uint32_t>(shader_stages.size());
 	graphics_create.pStages             = shader_stages.data();
 	graphics_create.layout              = pipeline_layouts.skybox;
 
@@ -331,6 +343,9 @@ void ExtendedDynamicState2::create_pipeline()
 	graphics_create.renderPass = render_pass;
 
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &graphics_create, VK_NULL_HANDLE, &skybox_pipeline));
+
+	shadertype = 1;
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
 }
 
 /**
@@ -389,6 +404,12 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.skybox, 0, 1, &descriptor_sets.skybox, 0, nullptr);
 
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
+		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
+
+		draw_model(object, draw_cmd_buffer);
+
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
 
 		draw_model(object, draw_cmd_buffer);
 
@@ -507,7 +528,6 @@ void ExtendedDynamicState2::create_descriptor_sets()
 
 	VkDescriptorBufferInfo model_buffer_descriptor = create_descriptor(*uniform_buffers.model_tessellation);
 
-
 	write_descriptor_sets =
 	    {
 	        // Binding 0 : Shared tessellation shader ubo
@@ -517,10 +537,10 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	            0,
 	            &model_buffer_descriptor),
 
-			vkb::initializers::write_descriptor_set(
-				descriptor_sets.model,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				1, &environment_image_descriptor),
+	        vkb::initializers::write_descriptor_set(
+	            descriptor_sets.model,
+	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	            1, &environment_image_descriptor),
 	    };
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, NULL);
 }
@@ -594,7 +614,6 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 			update_uniform_buffers();
 			build_command_buffers();
 		}
-
 	}
 }
 
