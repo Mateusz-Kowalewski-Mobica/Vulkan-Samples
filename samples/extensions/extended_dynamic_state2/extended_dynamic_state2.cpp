@@ -82,11 +82,13 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 	{
 		throw std::runtime_error("Unable to dynamically load vkCmdSetRasterizerDiscardEnableEXT");
 	}
+	
 	/* TODO: make it better later */
 
 #endif
 
 	extended_dynamic_state2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
+	extended_dynamic_state2_features.extendedDynamicState2 = VK_TRUE;
 	VkPhysicalDeviceFeatures2 device_features{};
 	device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	device_features.pNext = &extended_dynamic_state2_features;
@@ -169,6 +171,7 @@ void ExtendedDynamicState2::update_uniform_buffers()
 	ubo_vs.modelview        = camera.matrices.view * glm::mat4(1.f);
 	ubo_vs.skybox_modelview = camera.matrices.view;
 	ubo->convert_and_update(ubo_vs);
+
 }
 
 /**
@@ -206,6 +209,10 @@ void ExtendedDynamicState2::create_pipeline()
 	        VK_CULL_MODE_BACK_BIT,
 	        VK_FRONT_FACE_COUNTER_CLOCKWISE,
 	        0);
+	// rasterization_state.depthBiasConstantFactor = 0.5f;
+	// rasterization_state.depthBiasClamp = 0.5f;
+	// rasterization_state.depthBiasSlopeFactor = 0.5f;
+
 
 	VkPipelineColorBlendAttachmentState blend_attachment_state =
 	    vkb::initializers::pipeline_color_blend_attachment_state(
@@ -239,7 +246,7 @@ void ExtendedDynamicState2::create_pipeline()
 	std::vector<VkDynamicState> dynamic_state_enables = {
 	    VK_DYNAMIC_STATE_VIEWPORT,
 	    VK_DYNAMIC_STATE_SCISSOR,
-	    VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT};
+		VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
 	        dynamic_state_enables.data(),
@@ -386,10 +393,13 @@ void ExtendedDynamicState2::build_command_buffers()
 		render_pass_begin_info.clearValueCount          = 3;
 		render_pass_begin_info.pClearValues             = clear_values.data();
 
+		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
+		//vkCmdSetDepthBiasEnable(draw_cmd_buffer, gui_settings.depth_bias_enable);
+
 		vkCmdBeginRenderPass(draw_cmd_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
 		draw_scene();
-
+		
 		vkCmdEndRenderPass(draw_cmd_buffer);
 
 		VK_CHECK(vkEndCommandBuffer(draw_cmd_buffer));
