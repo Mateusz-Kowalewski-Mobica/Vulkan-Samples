@@ -28,12 +28,15 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		bool      depth_bias_enable         = false;
 		bool      primitive_restart_enable  = false;
 		bool      rasterizer_discard_enable = false;
-		bool	  tessellation = false;
-		float	  tess_factor = 1.0;
+		bool      tessellation              = false;
+		float     tess_factor               = 1.0;
 		int32_t   logic_op_index{};
 		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
 		float     patch_control_points_float{4.0f};
 		uint32_t  patch_control_points{4};
+		float	  lightX{1};
+		float	  lightY{1};
+		float	  lightZ{1};
 	} gui_settings;
 
 	std::vector<std::string> logic_op_object_names{"CLEAR",
@@ -65,7 +68,10 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		glm::mat4 projection;
 		glm::mat4 modelview;
 		glm::mat4 skybox_modelview;
-		float     modelscale            = 0.15f;
+		glm::vec4 ambientLightColor{1.f, 1.f, 1.f, 0.025f};
+		glm::vec3 lightPosition{0.5f, 5.f, 0.f};
+		glm::vec4 lightColor{1.f};
+		float     modelscale = 0.25f;
 	} ubo_vs;
 
 	struct UBOTESS
@@ -79,7 +85,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		glm::vec2 viewport_dim;
 		// Desired size of tessellated quad patch edge
 		float tessellated_edge_size = 20.0f;
-		float     modelscale            = 0.15f;
+		float modelscale            = 0.15f;
 	} ubo_tess;
 
 	struct
@@ -105,22 +111,34 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		std::unique_ptr<vkb::core::Buffer> model_tessellation;
 		std::unique_ptr<vkb::core::Buffer> skybox;
 	} uniform_buffers;
+	
 
 	//VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
 	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
 	VkPipeline                                         skybox_pipeline{VK_NULL_HANDLE};
+	VkPipeline                                         light_indicator_pipeline{VK_NULL_HANDLE};
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT   extended_dynamic_state2_features{};
 	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphics_pipeline_library{};
-	VkVertexInputBindingDescription2EXT                vertex_bindings_description_ext{};
-	VkVertexInputAttributeDescription2EXT              vertex_attribute_description_ext[2]{};
+
+	std::unique_ptr<vkb::sg::Scene> scene;
+	struct SceneNode
+	{
+		std::string       name;
+		vkb::sg::Node *   node;
+		vkb::sg::SubMesh *sub_mesh;
+	};
+	std::vector<SceneNode> linear_scene_nodes;
+	std::vector<int32_t>               visibility_list;
 
 	//VkDescriptorSet       descriptor_set{VK_NULL_HANDLE};
 	//VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
-	VkDescriptorPool      descriptor_pool{VK_NULL_HANDLE};
+	VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
 
-	std::unique_ptr<vkb::sg::SubMesh>  skybox;
-	std::unique_ptr<vkb::sg::SubMesh>  object;
-	vkb::Frustum                       frustum;
+	std::unique_ptr<vkb::sg::SubMesh> skybox;
+	std::unique_ptr<vkb::sg::SubMesh> object;
+	std::unique_ptr<vkb::sg::SubMesh> plane;
+	std::unique_ptr<vkb::sg::SubMesh> lightIndicator;
+	vkb::Frustum                      frustum;
 
 	ExtendedDynamicState2();
 	~ExtendedDynamicState2();

@@ -19,6 +19,7 @@
 
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec3 inLightColor;
 
 layout(location = 0) out vec4 outColor0;
 
@@ -26,19 +27,29 @@ layout(constant_id = 0) const int type = 0;
 
 void main()
 {
-    switch (type)
+
+
+        switch (type)
 	{
         case 0:
         {
-	        outColor0.rgb        = vec3(0.7569, 0.098, 0.098);
+	        outColor0        = vec4(inLightColor, 1.0);
             break;
         }
 
         case 1:
         {
-	        outColor0.rgb        = vec3(0.1412, 0.7569, 0.2549);
+	        outColor0        = vec4(inLightColor, 1.0);
+            break;
+        }
+
+        case 2:
+        {
+            outColor0.xyz = vec3(0.9451, 0.0275, 0.0275);
             break;
         }
     }
+
+
 
 }

@@ -17,6 +17,12 @@
 
 #include "extended_dynamic_state2.h"
 
+#include "gltf_loader.h"
+#include "scene_graph/components/mesh.h"
+#include "scene_graph/components/pbr_material.h"
+#include "scene_graph/components/sub_mesh.h"
+
+
 ExtendedDynamicState2::ExtendedDynamicState2()
 {
 	title = "Extended Dynamic State2";
@@ -117,12 +123,23 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
  */
 void ExtendedDynamicState2::load_assets()
 {
-	/* Models */
-	skybox = load_model("scenes/cube.gltf");
-	object = load_model("scenes/cube.gltf");
-
-	/* Load HDR cube map */
-	textures.envmap = load_texture_cubemap("textures/uffizi_rgba16f_cube.ktx", vkb::sg::Image::Color);
+	vkb::GLTFLoader loader{get_device()};
+	scene = loader.read_scene_from_file("scenes/Test_scene/Test_scene.gltf");
+	assert(scene);
+	// Store all scene nodes in a linear vector for easier access
+	for (auto &mesh : scene->get_components<vkb::sg::Mesh>())
+	{
+		for (auto &node : mesh->get_nodes())
+		{
+			for (auto &sub_mesh : mesh->get_submeshes())
+			{
+				linear_scene_nodes.push_back({mesh->get_name(), node, sub_mesh});
+			}
+		}
+	}
+	// By default, all nodes should be visible, so we initialize the list with ones for each element
+	visibility_list.resize(linear_scene_nodes.size());
+	std::fill(visibility_list.begin(), visibility_list.end(), 1);
 }
 
 /**
@@ -171,6 +188,9 @@ void ExtendedDynamicState2::update_uniform_buffers()
 	ubo_vs.projection       = camera.matrices.perspective;
 	ubo_vs.modelview        = camera.matrices.view * glm::mat4(1.f);
 	ubo_vs.skybox_modelview = camera.matrices.view;
+	ubo_vs.lightPosition.x = gui_settings.lightX;
+	ubo_vs.lightPosition.y = gui_settings.lightY;
+	ubo_vs.lightPosition.z = gui_settings.lightZ;
 
 	uniform_buffers.skybox->convert_and_update(ubo_vs);
 
@@ -230,7 +250,7 @@ void ExtendedDynamicState2::create_pipeline()
 
 	VkPipelineRasterizationStateCreateInfo rasterization_state =
 	    vkb::initializers::pipeline_rasterization_state_create_info(
-	        VK_POLYGON_MODE_LINE,
+	        VK_POLYGON_MODE_FILL,
 	        VK_CULL_MODE_BACK_BIT,
 	        VK_FRONT_FACE_COUNTER_CLOCKWISE,
 	        0);
@@ -346,6 +366,9 @@ void ExtendedDynamicState2::create_pipeline()
 
 	shadertype = 1;
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &graphics_create, VK_NULL_HANDLE, &model_pipeline));
+
+	shadertype = 2;
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &graphics_create, VK_NULL_HANDLE, &light_indicator_pipeline));
 }
 
 /**
@@ -406,12 +429,17 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
 		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
 
-		draw_model(object, draw_cmd_buffer);
+		//draw_model(object, draw_cmd_buffer);
 
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
 		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
 
-		draw_model(object, draw_cmd_buffer);
+		//draw_model(plane, draw_cmd_buffer);
+
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, light_indicator_pipeline);
+		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
+
+		//draw_model(lightIndicator, draw_cmd_buffer);
 
 		/* UI */
 		draw_ui(draw_cmd_buffer);
@@ -597,6 +625,18 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 			update_uniform_buffers();
 		}
 		if (drawer.input_float("Tessellation Factor", &gui_settings.tess_factor, 1.0f, 1))
+		{
+			update_uniform_buffers();
+		}
+		if (drawer.input_float("Light position X", &gui_settings.lightX, 0.1f, 2))
+		{
+			update_uniform_buffers();
+		}
+		if (drawer.input_float("Light position Y", &gui_settings.lightY, 0.1f, 2))
+		{
+			update_uniform_buffers();
+		}
+		if (drawer.input_float("Light position Z", &gui_settings.lightZ, 0.1f, 2))
 		{
 			update_uniform_buffers();
 		}
