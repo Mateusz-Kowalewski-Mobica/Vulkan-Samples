@@ -87,13 +87,6 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 
 #endif
 
-	// extended_dynamic_state2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
-	// extended_dynamic_state2_features.extendedDynamicState2 = VK_TRUE;
-	// VkPhysicalDeviceFeatures2 device_features{};
-	// device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	// device_features.pNext = &extended_dynamic_state2_features;
-	// vkGetPhysicalDeviceFeatures2(get_device().get_gpu().get_handle(), &device_features);
-
 	camera.type = vkb::CameraType::LookAt;
 	camera.set_position({0.f, 0.f, -4.0f});
 	camera.set_rotation({0.f, 0.f, 0.f});
@@ -209,10 +202,6 @@ void ExtendedDynamicState2::create_pipeline()
 	        VK_CULL_MODE_BACK_BIT,
 	        VK_FRONT_FACE_COUNTER_CLOCKWISE,
 	        0);
-	// rasterization_state.depthBiasConstantFactor = 0.5f;
-	// rasterization_state.depthBiasClamp = 0.5f;
-	// rasterization_state.depthBiasSlopeFactor = 0.5f;
-
 
 	VkPipelineColorBlendAttachmentState blend_attachment_state =
 	    vkb::initializers::pipeline_color_blend_attachment_state(
@@ -261,8 +250,8 @@ void ExtendedDynamicState2::create_pipeline()
 
 	// Attribute descriptions
 	std::vector<VkVertexInputAttributeDescription> vertex_input_attributes = {
-	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),                        // Position
-	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3),        // Normal
+	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),            // Position
+	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT,  offsetof(Vertex, normal)),        // Normal
 	};
 
 	VkPipelineVertexInputStateCreateInfo vertex_input_state = vkb::initializers::pipeline_vertex_input_state_create_info();
@@ -351,30 +340,6 @@ void ExtendedDynamicState2::build_command_buffers()
 		i++;
 		auto command_begin = vkb::initializers::command_buffer_begin_info();
 		VK_CHECK(vkBeginCommandBuffer(draw_cmd_buffer, &command_begin));
-		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
-
-		auto draw_scene = [&] {
-			VkViewport viewport = vkb::initializers::viewport((float) width, (float) height, 0.0f, 1.0f);
-			vkCmdSetViewport(draw_cmd_buffer, 0, 1, &viewport);
-
-			VkRect2D scissor = vkb::initializers::rect2D(static_cast<int>(width), static_cast<int>(height), 0, 0);
-			vkCmdSetScissor(draw_cmd_buffer, 0, 1, &scissor);
-
-			/* One descriptor set is used, and the draw type is toggled by a specialization constant */
-			vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
-
-			/* skybox */
-			vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
-			draw_model(skybox, draw_cmd_buffer);
-
-			/* object */
-			vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
-
-			draw_model(object, draw_cmd_buffer);
-
-			/* UI */
-			draw_ui(draw_cmd_buffer);
-		};
 
 		VkImageSubresourceRange range{};
 		range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -391,15 +356,35 @@ void ExtendedDynamicState2::build_command_buffers()
 		render_pass_begin_info.framebuffer              = framebuffers[i];
 		render_pass_begin_info.renderArea.extent.width  = width;
 		render_pass_begin_info.renderArea.extent.height = height;
-		render_pass_begin_info.clearValueCount          = 3;
+		render_pass_begin_info.clearValueCount          = static_cast<uint32_t>(clear_values.size());
 		render_pass_begin_info.pClearValues             = clear_values.data();
 
-		// vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
-		//vkCmdSetDepthBiasEnable(draw_cmd_buffer, gui_settings.depth_bias_enable);
-
 		vkCmdBeginRenderPass(draw_cmd_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-		// vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
-		draw_scene();
+
+
+		VkViewport viewport = vkb::initializers::viewport((float) width, (float) height, 0.0f, 1.0f);
+		vkCmdSetViewport(draw_cmd_buffer, 0, 1, &viewport);
+
+		VkRect2D scissor = vkb::initializers::rect2D(static_cast<int>(width), static_cast<int>(height), 0, 0);
+		vkCmdSetScissor(draw_cmd_buffer, 0, 1, &scissor);
+
+		/* One descriptor set is used, and the draw type is toggled by a specialization constant */
+		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
+
+		/* Update RasterizerDiscardEnableEXT extension */
+		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
+
+		/* skybox */
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
+		draw_model(skybox, draw_cmd_buffer);
+
+		/* object */
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+
+		draw_model(object, draw_cmd_buffer);
+
+		/* UI */
+		draw_ui(draw_cmd_buffer);
 		
 		vkCmdEndRenderPass(draw_cmd_buffer);
 
@@ -480,6 +465,7 @@ void ExtendedDynamicState2::request_gpu_features(vkb::PhysicalDevice &gpu)
 	requested_extended_dynamic_state2_features.extendedDynamicState2LogicOp            = VK_TRUE;
 	requested_extended_dynamic_state2_features.extendedDynamicState2PatchControlPoints = VK_TRUE;
 
+	/* temporary solution to keep validation layer clean of bug that will be solved is next version of Vulkan SDK*/
 	auto &requested_extended_dynamic_state_feature 									   = gpu.request_extension_features<VkPhysicalDeviceExtendedDynamicStateFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT);
 	requested_extended_dynamic_state_feature.extendedDynamicState					   = VK_TRUE;
 
