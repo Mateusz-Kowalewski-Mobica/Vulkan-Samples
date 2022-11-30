@@ -87,12 +87,12 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 
 #endif
 
-	extended_dynamic_state2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
-	extended_dynamic_state2_features.extendedDynamicState2 = VK_TRUE;
-	VkPhysicalDeviceFeatures2 device_features{};
-	device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	device_features.pNext = &extended_dynamic_state2_features;
-	vkGetPhysicalDeviceFeatures2(get_device().get_gpu().get_handle(), &device_features);
+	// extended_dynamic_state2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
+	// extended_dynamic_state2_features.extendedDynamicState2 = VK_TRUE;
+	// VkPhysicalDeviceFeatures2 device_features{};
+	// device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	// device_features.pNext = &extended_dynamic_state2_features;
+	// vkGetPhysicalDeviceFeatures2(get_device().get_gpu().get_handle(), &device_features);
 
 	camera.type = vkb::CameraType::LookAt;
 	camera.set_position({0.f, 0.f, -4.0f});
@@ -351,6 +351,7 @@ void ExtendedDynamicState2::build_command_buffers()
 		i++;
 		auto command_begin = vkb::initializers::command_buffer_begin_info();
 		VK_CHECK(vkBeginCommandBuffer(draw_cmd_buffer, &command_begin));
+		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
 
 		auto draw_scene = [&] {
 			VkViewport viewport = vkb::initializers::viewport((float) width, (float) height, 0.0f, 1.0f);
@@ -393,11 +394,11 @@ void ExtendedDynamicState2::build_command_buffers()
 		render_pass_begin_info.clearValueCount          = 3;
 		render_pass_begin_info.pClearValues             = clear_values.data();
 
-		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
+		// vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
 		//vkCmdSetDepthBiasEnable(draw_cmd_buffer, gui_settings.depth_bias_enable);
 
 		vkCmdBeginRenderPass(draw_cmd_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
+		// vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
 		draw_scene();
 		
 		vkCmdEndRenderPass(draw_cmd_buffer);
@@ -478,6 +479,9 @@ void ExtendedDynamicState2::request_gpu_features(vkb::PhysicalDevice &gpu)
 	requested_extended_dynamic_state2_features.extendedDynamicState2                   = VK_TRUE;
 	requested_extended_dynamic_state2_features.extendedDynamicState2LogicOp            = VK_TRUE;
 	requested_extended_dynamic_state2_features.extendedDynamicState2PatchControlPoints = VK_TRUE;
+
+	auto &requested_extended_dynamic_state_feature 									   = gpu.request_extension_features<VkPhysicalDeviceExtendedDynamicStateFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT);
+	requested_extended_dynamic_state_feature.extendedDynamicState					   = VK_TRUE;
 
 	if (gpu.get_features().samplerAnisotropy)
 	{
