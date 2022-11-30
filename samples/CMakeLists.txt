@@ -104,11 +104,17 @@ set(ORDER_LIST
     #HPP API Samples
     "hpp_compute_nbody"
 	"hpp_dynamic_uniform_buffers"
-	"hpp_instancing"
 	"hpp_hdr"
     "hpp_hello_triangle"
 	"hpp_hlsl_shaders"
-	"hpp_texture_loading")
+	"hpp_instancing"
+	"hpp_separate_image_sampler"
+	"hpp_terrain_tessellation"
+	"hpp_texture_loading"
+	"hpp_texture_mipmap_generation"
+	
+    #HPP Performance Samples
+    "hpp_swapchain_images")
 
 # Orders the sample ids by the order list above
 set(ORDERED_LIST)

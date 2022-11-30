@@ -120,13 +120,16 @@ set(RENDERING_FILES
     rendering/render_frame.cpp
     rendering/render_pipeline.cpp
     rendering/render_target.cpp
-    rendering/subpass.cpp)
+    rendering/subpass.cpp
+    rendering/hpp_render_context.cpp
+    rendering/hpp_render_target.cpp)
 
 set(RENDERING_SUBPASSES_FILES
     # Header files
     rendering/subpasses/forward_subpass.h
     rendering/subpasses/lighting_subpass.h
     rendering/subpasses/geometry_subpass.h
+    rendering/subpasses/hpp_forward_subpass.h
     # Source files
     rendering/subpasses/forward_subpass.cpp
     rendering/subpasses/lighting_subpass.cpp
@@ -281,9 +284,11 @@ set(CORE_FILES
     core/vulkan_resource.cpp
     core/hpp_command_pool.cpp
     core/hpp_device.cpp
+    core/hpp_image.cpp
     core/hpp_instance.cpp
     core/hpp_physical_device.cpp
     core/hpp_queue.cpp
+    core/hpp_swapchain.cpp
     core/hpp_vulkan_resource.cpp
 )
 

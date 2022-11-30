@@ -17,29 +17,27 @@
 
 #pragma once
 
-#include <resource_cache.h>
+#include <hpp_vulkan_sample.h>
 
-namespace vkb
-{
-namespace core
-{
-class HPPDevice;
-}
+#include <scene_graph/components/camera.h>
 
 /**
- * @brief facade class around vkb::ResourceCache, providing a vulkan.hpp-based interface
- *
- * See vkb::ResourceCache for documentation
+ * @brief Using triple buffering over double buffering, using Vulkan-Hpp
  */
-class HPPResourceCache : private vkb::ResourceCache
+class HPPSwapchainImages : public vkb::HPPVulkanSample
 {
   public:
-	using vkb::ResourceCache::clear;
-	using vkb::ResourceCache::clear_framebuffers;
+	HPPSwapchainImages();
 
-	HPPResourceCache(vkb::core::HPPDevice &device) :
-	    vkb::ResourceCache(reinterpret_cast<vkb::Device &>(device))
-	{}
+	// from vkb::HPPVulkanSample
+	virtual bool prepare(vkb::platform::HPPPlatform &platform) override;
+	virtual void update(float delta_time) override;
+	virtual void draw_gui() override;
+
+  private:
+	vkb::sg::Camera *camera{nullptr};
+	int              swapchain_image_count{3};
+	int              last_swapchain_image_count{3};
 };
 
-}        // namespace vkb
+std::unique_ptr<vkb::Application> create_hpp_swapchain_images();

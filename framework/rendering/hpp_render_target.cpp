@@ -1,5 +1,4 @@
-#version 450
-/* Copyright (c) 2019-2022, Sascha Willems
+/* Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -15,23 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
-layout (location = 0) in vec3 inPos;
-layout (location = 1) in vec2 inUV;
 
-layout (set = 0, binding = 0) uniform UBO 
+#include "rendering/hpp_render_target.h"
+
+namespace vkb
 {
-	mat4 projection;
-	mat4 modelview;
-	float lodBias;
-	int samplerIndex;
-} ubo;
-
-layout (location = 0) out vec2 outUV;
-
-void main() 
+namespace rendering
 {
-	outUV = inUV;
-	vec3 worldPos = vec3(ubo.modelview * vec4(inPos, 1.0));
-	gl_Position = ubo.projection * ubo.modelview * vec4(inPos.xyz, 1.0);
+const HPPRenderTarget::CreateFunc HPPRenderTarget::DEFAULT_CREATE_FUNC = [](vkb::core::HPPImage &&swapchain_image) -> std::unique_ptr<HPPRenderTarget> {
+	return std::unique_ptr<HPPRenderTarget>(
+	    reinterpret_cast<HPPRenderTarget *>(vkb::RenderTarget::DEFAULT_CREATE_FUNC(reinterpret_cast<vkb::core::Image &&>(swapchain_image)).release()));
+};
 }
+}        // namespace vkb
