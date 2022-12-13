@@ -23,6 +23,7 @@ ExtendedDynamicState2::ExtendedDynamicState2()
 
 	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
+	add_device_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 }
 
 ExtendedDynamicState2::~ExtendedDynamicState2()
@@ -62,6 +63,7 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 	vkCmdSetPatchControlPointsEXT      = (PFN_vkCmdSetPatchControlPointsEXT) vkGetInstanceProcAddr(instance, "vkCmdSetPatchControlPointsEXT");
 	vkCmdSetPrimitiveRestartEnableEXT  = (PFN_vkCmdSetPrimitiveRestartEnableEXT) vkGetInstanceProcAddr(instance, "vkCmdSetPrimitiveRestartEnableEXT");
 	vkCmdSetRasterizerDiscardEnableEXT = (PFN_vkCmdSetRasterizerDiscardEnableEXT) vkGetInstanceProcAddr(instance, "vkCmdSetRasterizerDiscardEnableEXT");
+	vkCmdSetPrimitiveTopologyEXT 	   = (PFN_vkCmdSetPrimitiveTopologyEXT) vkGetInstanceProcAddr(instance, "vkCmdSetPrimitiveTopologyEXT");
 	if (!vkCmdSetDepthBiasEnableEXT)
 	{
 		throw std::runtime_error("Unable to dynamically load vkCmdSetDepthBiasEnableEXT");
@@ -82,6 +84,10 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 	{
 		throw std::runtime_error("Unable to dynamically load vkCmdSetRasterizerDiscardEnableEXT");
 	}
+	if (!vkCmdSetPrimitiveTopologyEXT)
+	{
+		throw std::runtime_error("Unable to dynamically load vkCmdSetPrimitiveTopologyEXT");
+	}
 	
 	/* TODO: make it better later */
 
@@ -94,6 +100,7 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 
 	load_assets();
 	prepare_uniform_buffers();
+	model_data_creation();
 	create_descriptor_pool();
 	setup_descriptor_set_layout();
 	create_descriptor_sets();
@@ -235,6 +242,8 @@ void ExtendedDynamicState2::create_pipeline()
 	std::vector<VkDynamicState> dynamic_state_enables = {
 	    VK_DYNAMIC_STATE_VIEWPORT,
 	    VK_DYNAMIC_STATE_SCISSOR,
+		VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY_EXT,
+		VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE_EXT,
 		VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
@@ -375,13 +384,19 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffer, gui_settings.rasterizer_discard_enable);
 
 		/* skybox */
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffer, VK_FALSE);
+
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
 		draw_model(skybox, draw_cmd_buffer);
 
 		/* object */
-		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
+		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffer, VK_TRUE);
 
-		draw_model(object, draw_cmd_buffer);
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
+		//draw_model(object, draw_cmd_buffer);
+		draw_created_model(draw_cmd_buffer);
 
 		/* UI */
 		draw_ui(draw_cmd_buffer);
@@ -483,10 +498,6 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 		{
 			update_uniform_buffers();
 		}
-		if (drawer.checkbox("Primitive Restart Enable", &gui_settings.primitive_restart_enable))
-		{
-			update_uniform_buffers();
-		}
 		if (drawer.checkbox("Rasterizer Discard Enable", &gui_settings.rasterizer_discard_enable))
 		{
 			update_uniform_buffers();
@@ -502,6 +513,131 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 			gui_settings.patch_control_points = (uint32_t) roundf(gui_settings.patch_control_points_float);
 		}
 	}
+}
+
+void ExtendedDynamicState2::draw_created_model(VkCommandBuffer commandBuffer)
+{
+	VkDeviceSize offsets[1] = {0};
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, cube.vertices->get(), offsets);
+	vkCmdBindIndexBuffer(commandBuffer, cube.indices->get_handle(), 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(commandBuffer, cube.index_count, 1, 0, 0, 0);
+}
+
+void ExtendedDynamicState2::model_data_creation()
+{
+	constexpr uint32_t                     vertex_count = 8;
+	std::array<Vertex, vertex_count> vertices;
+
+	vertices[0].pos = {0.0f, 0.0f, 0.0f};
+	vertices[1].pos = {1.0f, 0.0f, 0.0f};
+	vertices[2].pos = {1.0f, 1.0f, 0.0f};
+	vertices[3].pos = {0.0f, 1.0f, 0.0f};
+	vertices[4].pos = {0.0f, 0.0f, 1.0f};
+	vertices[5].pos = {1.0f, 0.0f, 1.0f};
+	vertices[6].pos = {1.0f, 1.0f, 1.0f};
+	vertices[7].pos = {0.0f, 1.0f, 1.0f};
+
+	/* Normalized normal vectors for each face of cube */
+	glm::vec3 Xp = {1.0, 0.0, 0.0};
+	glm::vec3 Xm = {-1.0, 0.0, 0.0};
+	glm::vec3 Yp = {0.0, 1.0, 0.0};
+	glm::vec3 Ym = {0.0, -1.0, 0.0};
+	glm::vec3 Zp = {0.0, 0.0, 1.0};
+	glm::vec3 Zm = {0.0, 0.0, -1.0};
+
+	/* Normalized normal vectors for each vertex (created by sum of corresponding faces) */
+	vertices[0].normal = glm::normalize(Xm + Ym + Zm);
+	vertices[1].normal = glm::normalize(Xp + Ym + Zm);
+	vertices[2].normal = glm::normalize(Xp + Yp + Zm);
+	vertices[3].normal = glm::normalize(Xm + Yp + Zm);
+	vertices[4].normal = glm::normalize(Xm + Ym + Zp);
+	vertices[5].normal = glm::normalize(Xp + Ym + Zp);
+	vertices[6].normal = glm::normalize(Xp + Yp + Zp);
+	vertices[7].normal = glm::normalize(Xm + Yp + Zp);
+
+
+	/* Scaling and position transform */
+	for (uint8_t i = 0; i < vertex_count; i++)
+	{
+		vertices[i].pos *= glm::vec3(10.0f, 10.0f, 10.0f);
+		vertices[i].pos -= glm::vec3(5.0f, 5.0f, 5.0f);
+	}
+
+	constexpr uint32_t index_count        = 29;
+	uint32_t           vertex_buffer_size = vertex_count * sizeof(Vertex);
+	uint32_t           index_buffer_size  = index_count * sizeof(uint32_t);
+	cube.index_count                      = index_count;
+
+	/* Array with vertices indexes for corresponding triangles */
+	std::array<uint32_t, index_count> indices{0, 4, 3, 7,
+	                                          0xFFFFFFFF,
+											  1, 0, 2, 3,
+											  0xFFFFFFFF,
+											  2, 6, 1, 5,
+											  0xFFFFFFFF,
+											  1, 5, 0, 4,
+											  0xFFFFFFFF,
+											  4, 5, 7, 6,
+											  0xFFFFFFFF,
+											  2, 3, 6, 7,};
+
+	struct
+	{
+		VkBuffer       buffer;
+		VkDeviceMemory memory;
+	} vertex_staging, index_staging;
+
+	vertex_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    vertex_buffer_size,
+	    &vertex_staging.memory,
+	    vertices.data());
+
+	index_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    index_buffer_size,
+	    &index_staging.memory,
+	    indices.data());
+
+	cube.vertices = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                    vertex_buffer_size,
+	                                                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                    VMA_MEMORY_USAGE_GPU_ONLY);
+
+	cube.indices = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                   index_buffer_size,
+	                                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                   VMA_MEMORY_USAGE_GPU_ONLY);
+
+	/* Copy from staging buffers */
+	VkCommandBuffer copy_command = device->create_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+	VkBufferCopy copy_region = {};
+
+	copy_region.size = vertex_buffer_size;
+	vkCmdCopyBuffer(
+	    copy_command,
+	    vertex_staging.buffer,
+	    cube.vertices->get_handle(),
+	    1,
+	    &copy_region);
+
+	copy_region.size = index_buffer_size;
+	vkCmdCopyBuffer(
+	    copy_command,
+	    index_staging.buffer,
+	    cube.indices->get_handle(),
+	    1,
+	    &copy_region);
+
+	device->flush_command_buffer(copy_command, queue, true);
+
+	vkDestroyBuffer(get_device().get_handle(), vertex_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), vertex_staging.memory, nullptr);
+	vkDestroyBuffer(get_device().get_handle(), index_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), index_staging.memory, nullptr);
 }
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2()

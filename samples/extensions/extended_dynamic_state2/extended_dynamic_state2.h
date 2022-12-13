@@ -26,7 +26,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	struct 
 	{
 		bool depth_bias_enable = false;
-		bool primitive_restart_enable = false;
 		bool rasterizer_discard_enable = false;
 		int32_t logic_op_index{};
 		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
@@ -64,6 +63,13 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		float     modelscale = 0.15f;
 	} ubo_vs;
 
+	struct Cube
+	{
+		std::unique_ptr<vkb::core::Buffer> vertices;
+		std::unique_ptr<vkb::core::Buffer> indices;
+		uint32_t                           index_count;
+	} cube;
+
 	VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
 	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
 	VkPipeline                                         skybox_pipeline{VK_NULL_HANDLE};
@@ -99,12 +105,16 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void setup_descriptor_set_layout();
 	void create_descriptor_sets();
 
+	void model_data_creation();
+	void draw_created_model(VkCommandBuffer commandBuffer);
+
 #if VK_NO_PROTOTYPES
 	PFN_vkCmdSetDepthBiasEnableEXT         vkCmdSetDepthBiasEnableEXT{VK_NULL_HANDLE};
 	PFN_vkCmdSetLogicOpEXT                 vkCmdSetLogicOpEXT{VK_NULL_HANDLE};
 	PFN_vkCmdSetPatchControlPointsEXT      vkCmdSetPatchControlPointsEXT{VK_NULL_HANDLE};
 	PFN_vkCmdSetPrimitiveRestartEnableEXT  vkCmdSetPrimitiveRestartEnableEXT{VK_NULL_HANDLE};
 	PFN_vkCmdSetRasterizerDiscardEnableEXT vkCmdSetRasterizerDiscardEnableEXT{VK_NULL_HANDLE};
+	PFN_vkCmdSetPrimitiveTopologyEXT       vkCmdSetPrimitiveTopologyEXT{VK_NULL_HANDLE};
 #endif
 
 };
