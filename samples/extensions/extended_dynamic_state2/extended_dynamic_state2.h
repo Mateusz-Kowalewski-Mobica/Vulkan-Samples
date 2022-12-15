@@ -19,25 +19,13 @@
 
 #include "api_vulkan_sample.h"
 #include "geometry/frustum.h"
+#include "scene_graph/components/pbr_material.h"
 
 class ExtendedDynamicState2 : public ApiVulkanSample
 {
   public:
-	struct
-	{
-		bool      depth_bias_enable         = false;
-		bool      primitive_restart_enable  = false;
-		bool      rasterizer_discard_enable = false;
-		bool      tessellation              = false;
-		float     tess_factor               = 1.0;
-		int32_t   logic_op_index{};
-		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
-		float     patch_control_points_float{4.0f};
-		uint32_t  patch_control_points{4};
-		float	  lightX{1};
-		float	  lightY{1};
-		float	  lightZ{1};
-	} gui_settings;
+
+
 
 	std::vector<std::string> logic_op_object_names{"CLEAR",
 	                                               "AND",
@@ -63,14 +51,42 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		Texture displace;
 	} textures;
 
+  	typedef struct 
+	{
+		bool depth_bias = false;
+		bool primitive_restart = true;
+		bool rasterizer_discard = false;
+		std::string name;
+	} model_dynamic_param;
+
+		struct
+	{
+		bool      primitive_restart_enable  = false;
+		bool      tessellation              = false;
+		float     tess_factor               = 1.0;
+		int32_t   logic_op_index{};
+		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
+		float     patch_control_points_float{4.0f};
+		uint32_t  patch_control_points{4};
+		float     lightX{0};
+		float     lightY{0};
+		float     lightZ{0};
+		float	  lightIntensity;
+
+		std::vector<model_dynamic_param> objects;
+		int selected_obj = 0;
+		bool time_tick = false;
+	} gui_settings;
+
 	struct UBOVS
 	{
 		glm::mat4 projection;
-		glm::mat4 modelview;
+		glm::mat4 view;
 		glm::mat4 skybox_modelview;
-		glm::vec4 ambientLightColor{1.f, 1.f, 1.f, 0.025f};
-		glm::vec3 lightPosition{0.5f, 5.f, 0.f};
+		glm::vec4 ambientLightColor{1.f, 1.f, 1.f, 0.1f};
+		glm::vec3 lightPosition{0.0f, 0.f, 0.f};
 		glm::vec4 lightColor{1.f};
+		float     lightIntensity{1.0f};
 		float     modelscale = 0.25f;
 	} ubo_vs;
 
@@ -111,7 +127,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		std::unique_ptr<vkb::core::Buffer> model_tessellation;
 		std::unique_ptr<vkb::core::Buffer> skybox;
 	} uniform_buffers;
-	
 
 	//VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
 	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
@@ -120,6 +135,12 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT   extended_dynamic_state2_features{};
 	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphics_pipeline_library{};
 
+	struct
+	{
+		glm::mat4 model_matrix;
+		glm::vec4 color;
+	} push_const_block;
+
 	std::unique_ptr<vkb::sg::Scene> scene;
 	struct SceneNode
 	{
@@ -127,8 +148,9 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		vkb::sg::Node *   node;
 		vkb::sg::SubMesh *sub_mesh;
 	};
-	std::vector<SceneNode> linear_scene_nodes;
+	std::vector<SceneNode>             linear_scene_nodes;
 	std::vector<int32_t>               visibility_list;
+	std::unique_ptr<vkb::core::Buffer> visibility_buffer;
 
 	//VkDescriptorSet       descriptor_set{VK_NULL_HANDLE};
 	//VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
@@ -148,9 +170,11 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	virtual bool prepare(vkb::Platform &platform) override;
 	virtual void request_gpu_features(vkb::PhysicalDevice &gpu) override;
 	virtual void on_update_ui_overlay(vkb::Drawer &drawer) override;
+	virtual void update(float delta_time) override;
 
 	void prepare_uniform_buffers();
 	void update_uniform_buffers();
+	void prepare_visibility_buffer();
 	void create_pipeline();
 	void draw();
 
@@ -158,6 +182,8 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void create_descriptor_pool();
 	void setup_descriptor_set_layout();
 	void create_descriptor_sets();
+	uint32_t get_node_index(std::string name);
+	void selection_indicator(const vkb::sg::PBRMaterial *original_mat, vkb::sg::PBRMaterial *new_mat);
 
 #if VK_NO_PROTOTYPES
 	PFN_vkCmdSetDepthBiasEnableEXT         vkCmdSetDepthBiasEnableEXT{VK_NULL_HANDLE};

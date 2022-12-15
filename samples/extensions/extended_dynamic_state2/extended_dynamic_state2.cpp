@@ -22,7 +22,6 @@
 #include "scene_graph/components/pbr_material.h"
 #include "scene_graph/components/sub_mesh.h"
 
-
 ExtendedDynamicState2::ExtendedDynamicState2()
 {
 	title = "Extended Dynamic State2";
@@ -95,15 +94,9 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 
 #endif
 
-	extended_dynamic_state2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
-	VkPhysicalDeviceFeatures2 device_features{};
-	device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	device_features.pNext = &extended_dynamic_state2_features;
-	vkGetPhysicalDeviceFeatures2(get_device().get_gpu().get_handle(), &device_features);
-
 	camera.type = vkb::CameraType::LookAt;
-	camera.set_position({0.f, 0.f, -4.0f});
-	camera.set_rotation({0.f, 0.f, 0.f});
+	camera.set_position({2.f, 4.f, -7.0f});
+	camera.set_rotation({0.f, 180.f, 180.f});
 	camera.set_perspective(60.f, (float) width / (float) height, 256.f, 0.1f);
 
 	load_assets();
@@ -126,11 +119,24 @@ void ExtendedDynamicState2::load_assets()
 	vkb::GLTFLoader loader{get_device()};
 	scene = loader.read_scene_from_file("scenes/Test_scene/Test_scene.gltf");
 	assert(scene);
+
+	auto light_pos   = glm::vec3(gui_settings.lightX, gui_settings.lightY, gui_settings.lightZ);
+	auto light_color = glm::vec3(0.9, 1.0, 1.0);
+
+	vkb::sg::LightProperties props;
+	props.color     = light_color;
+	props.intensity = 0.2f;
+
+	auto &light           = vkb::add_point_light(*scene, light_pos, props);
+	auto &light_transform = light.get_node()->get_transform().get_translation();
 	// Store all scene nodes in a linear vector for easier access
 	for (auto &mesh : scene->get_components<vkb::sg::Mesh>())
 	{
 		for (auto &node : mesh->get_nodes())
 		{
+			model_dynamic_param object_param{};
+			object_param.name = node->get_name();
+			gui_settings.objects.push_back(object_param);
 			for (auto &sub_mesh : mesh->get_submeshes())
 			{
 				linear_scene_nodes.push_back({mesh->get_name(), node, sub_mesh});
@@ -186,11 +192,32 @@ void ExtendedDynamicState2::prepare_uniform_buffers()
 void ExtendedDynamicState2::update_uniform_buffers()
 {
 	ubo_vs.projection       = camera.matrices.perspective;
-	ubo_vs.modelview        = camera.matrices.view * glm::mat4(1.f);
+	ubo_vs.view             = camera.matrices.view * glm::mat4(1.f);
 	ubo_vs.skybox_modelview = camera.matrices.view;
+
+	static glm::vec3 lightTranslation{0.0f};
+	if (ubo_vs.lightPosition.x != gui_settings.lightX ||
+	    ubo_vs.lightPosition.y != gui_settings.lightY ||
+	    ubo_vs.lightPosition.z != gui_settings.lightZ)
+	{
+		lightTranslation.x -= ubo_vs.lightPosition.x - gui_settings.lightX;
+		lightTranslation.y -= ubo_vs.lightPosition.y - gui_settings.lightY;
+		lightTranslation.z -= ubo_vs.lightPosition.z - gui_settings.lightZ;
+	}
+
 	ubo_vs.lightPosition.x = gui_settings.lightX;
 	ubo_vs.lightPosition.y = gui_settings.lightY;
 	ubo_vs.lightPosition.z = gui_settings.lightZ;
+	ubo_vs.lightIntensity  = gui_settings.lightIntensity;
+
+	for (uint32_t i = 0; i < linear_scene_nodes.size(); i++)
+	{
+		if (linear_scene_nodes.at(i).node->get_name() == "light_indicator")
+		{
+			linear_scene_nodes.at(i).node->get_transform().set_translation(lightTranslation);
+			break;
+		}
+	}
 
 	uniform_buffers.skybox->convert_and_update(ubo_vs);
 
@@ -255,21 +282,28 @@ void ExtendedDynamicState2::create_pipeline()
 	        VK_FRONT_FACE_COUNTER_CLOCKWISE,
 	        0);
 
-	rasterization_state.depthBiasConstantFactor = -20.0;
+	rasterization_state.depthBiasConstantFactor = 1;
+	rasterization_state.depthBiasSlopeFactor = 1;
+	rasterization_state.depthBiasClamp = 0;
 
 	VkPipelineColorBlendAttachmentState blend_attachment_state =
 	    vkb::initializers::pipeline_color_blend_attachment_state(
 	        0xf,
 	        VK_FALSE);
 
-	const auto color_attachment_state = vkb::initializers::pipeline_color_blend_attachment_state(0xf, VK_FALSE);
+	blend_attachment_state.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	blend_attachment_state.blendEnable         = VK_TRUE;
+	blend_attachment_state.colorBlendOp        = VK_BLEND_OP_ADD;
+	blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blend_attachment_state.alphaBlendOp        = VK_BLEND_OP_ADD;
+	blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 
 	VkPipelineColorBlendStateCreateInfo color_blend_state =
 	    vkb::initializers::pipeline_color_blend_state_create_info(
 	        1,
 	        &blend_attachment_state);
-	color_blend_state.attachmentCount = 1;
-	color_blend_state.pAttachments    = &color_attachment_state;
 
 	/* Note: Using Reversed depth-buffer for increased precision, so Greater depth values are kept */
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_state =
@@ -292,7 +326,8 @@ void ExtendedDynamicState2::create_pipeline()
 	std::vector<VkDynamicState> dynamic_state_enables = {
 	    VK_DYNAMIC_STATE_VIEWPORT,
 	    VK_DYNAMIC_STATE_SCISSOR,
-		VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT,
+	    VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT,
+		VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT,
 	};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
@@ -303,13 +338,14 @@ void ExtendedDynamicState2::create_pipeline()
 	// Vertex bindings an attributes for model rendering
 	// Binding description
 	std::vector<VkVertexInputBindingDescription> vertex_input_bindings = {
-	    vkb::initializers::vertex_input_binding_description(0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX),
+	    vkb::initializers::vertex_input_binding_description(0, sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX),
+	    vkb::initializers::vertex_input_binding_description(1, sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX),
 	};
 
 	// Attribute descriptions
 	std::vector<VkVertexInputAttributeDescription> vertex_input_attributes = {
-	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),           // Position
-	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)),        // Normal
+	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 /*offsetof(Vertex, pos)*/),           // Position
+	    vkb::initializers::vertex_input_attribute_description(1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0 /*offsetof(Vertex, normal)*/),        // Normal
 	};
 
 	VkPipelineVertexInputStateCreateInfo vertex_input_state = vkb::initializers::pipeline_vertex_input_state_create_info();
@@ -395,7 +431,7 @@ void ExtendedDynamicState2::build_command_buffers()
 	{
 		i++;
 		auto command_begin = vkb::initializers::command_buffer_begin_info();
-		VK_CHECK(vkBeginCommandBuffer(draw_cmd_buffer, &command_begin));
+		VK_CHECK(vkBeginCommandBuffer(draw_cmd_buffers[i], &command_begin));
 
 		VkImageSubresourceRange range{};
 		range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -415,38 +451,78 @@ void ExtendedDynamicState2::build_command_buffers()
 		render_pass_begin_info.clearValueCount          = static_cast<uint32_t>(clear_values.size());
 		render_pass_begin_info.pClearValues             = clear_values.data();
 
-		vkCmdBeginRenderPass(draw_cmd_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(draw_cmd_buffers[i], &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
 		VkViewport viewport = vkb::initializers::viewport((float) width, (float) height, 0.0f, 1.0f);
-		vkCmdSetViewport(draw_cmd_buffer, 0, 1, &viewport);
+		vkCmdSetViewport(draw_cmd_buffers[i], 0, 1, &viewport);
 
 		VkRect2D scissor = vkb::initializers::rect2D(static_cast<int>(width), static_cast<int>(height), 0, 0);
-		vkCmdSetScissor(draw_cmd_buffer, 0, 1, &scissor);
+		vkCmdSetScissor(draw_cmd_buffers[i], 0, 1, &scissor);
 
 		/* One descriptor set is used, and the draw type is toggled by a specialization constant */
-		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.skybox, 0, 1, &descriptor_sets.skybox, 0, nullptr);
+		vkCmdBindDescriptorSets(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.skybox, 0, 1, &descriptor_sets.skybox, 0, nullptr);
 
-		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
-		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
+		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
 
-		//draw_model(object, draw_cmd_buffer);
+		uint32_t node_index = 0;
+		for (auto &node : linear_scene_nodes)
+		{
+			const auto &vertex_buffer_pos    = node.sub_mesh->vertex_buffers.at("position");
+			const auto &vertex_buffer_normal = node.sub_mesh->vertex_buffers.at("normal");
+			auto &      index_buffer         = node.sub_mesh->index_buffer;
 
-		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, model_pipeline);
-		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
+			if(gui_settings.objects[node_index].depth_bias == true)
+			{
+				vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_TRUE);
+			}
+			else
+			{
+				vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_FALSE);
+			}
 
-		//draw_model(plane, draw_cmd_buffer);
+			if(gui_settings.objects[node_index].rasterizer_discard == true)
+			{
+				vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_TRUE);
+			}
+			else
+			{
+				vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_FALSE);
+			}
 
-		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, light_indicator_pipeline);
-		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffer, gui_settings.depth_bias_enable);
+			// Pass data for the current node via push commands
+			auto test = node.sub_mesh->get_material();
+			auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node.sub_mesh->get_material());
+			push_const_block.model_matrix = node.node->get_transform().get_world_matrix();
+			int tmp = node.node->get_id();
+			if(node.node->get_id() != gui_settings.selected_obj)
+			{
+				push_const_block.color        = node_material->base_color_factor;
+			}
+			else 
+			{
+					
+ 				vkb::sg::PBRMaterial temp_material{"Selected_Material"};
+				selection_indicator(node_material, &temp_material);
+				push_const_block.color = temp_material.base_color_factor;
+			}
+			vkCmdPushConstants(draw_cmd_buffers[i], pipeline_layouts.skybox, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
 
-		//draw_model(lightIndicator, draw_cmd_buffer);
+			VkDeviceSize offsets[1] = {0};
+			vkCmdBindVertexBuffers(draw_cmd_buffers[i], 0, 1, vertex_buffer_pos.get(), offsets);
+			vkCmdBindVertexBuffers(draw_cmd_buffers[i], 1, 1, vertex_buffer_normal.get(), offsets);
+			vkCmdBindIndexBuffer(draw_cmd_buffers[i], index_buffer->get_handle(), 0, node.sub_mesh->index_type);
+
+			vkCmdDrawIndexed(draw_cmd_buffers[i], node.sub_mesh->vertex_indices, 1, 0, 0, 0);
+
+			node_index++;
+		}
 
 		/* UI */
-		draw_ui(draw_cmd_buffer);
+		draw_ui(draw_cmd_buffers[i]);
 
-		vkCmdEndRenderPass(draw_cmd_buffer);
+		vkCmdEndRenderPass(draw_cmd_buffers[i]);
 
-		VK_CHECK(vkEndCommandBuffer(draw_cmd_buffer));
+		VK_CHECK(vkEndCommandBuffer(draw_cmd_buffers[i]));
 	}
 }
 
@@ -491,6 +567,11 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 	    vkb::initializers::pipeline_layout_create_info(
 	        &descriptor_set_layouts.skybox,
 	        1);
+
+	// Pass scene node information via push constants
+	VkPushConstantRange push_constant_range            = vkb::initializers::push_constant_range(VK_SHADER_STAGE_VERTEX_BIT, sizeof(push_const_block), 0);
+	pipeline_layout_create_info.pushConstantRangeCount = 1;
+	pipeline_layout_create_info.pPushConstantRanges    = &push_constant_range;
 
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &pipeline_layouts.skybox));
 
@@ -541,12 +622,9 @@ void ExtendedDynamicState2::create_descriptor_sets()
 
 	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.skybox));
 
-	VkDescriptorBufferInfo            matrix_buffer_descriptor     = create_descriptor(*uniform_buffers.skybox);
-	VkDescriptorImageInfo             environment_image_descriptor = create_descriptor(textures.envmap);
-	std::vector<VkWriteDescriptorSet> write_descriptor_sets        = {
-        vkb::initializers::write_descriptor_set(descriptor_sets.skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &matrix_buffer_descriptor),
-        vkb::initializers::write_descriptor_set(descriptor_sets.skybox, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &environment_image_descriptor),
-    };
+	VkDescriptorBufferInfo            matrix_buffer_descriptor = create_descriptor(*uniform_buffers.skybox);
+	std::vector<VkWriteDescriptorSet> write_descriptor_sets    = {
+        vkb::initializers::write_descriptor_set(descriptor_sets.skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &matrix_buffer_descriptor)};
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
 	/* Dodac wersje dla modelu*/
 
@@ -563,13 +641,7 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	            descriptor_sets.model,
 	            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	            0,
-	            &model_buffer_descriptor),
-
-	        vkb::initializers::write_descriptor_set(
-	            descriptor_sets.model,
-	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	            1, &environment_image_descriptor),
-	    };
+	            &model_buffer_descriptor)};
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, NULL);
 }
 
@@ -582,6 +654,9 @@ void ExtendedDynamicState2::request_gpu_features(vkb::PhysicalDevice &gpu)
 	requested_extended_dynamic_state2_features.extendedDynamicState2LogicOp            = VK_TRUE;
 	requested_extended_dynamic_state2_features.extendedDynamicState2PatchControlPoints = VK_TRUE;
 
+	auto &requested_extended_dynamic_state_feature                = gpu.request_extension_features<VkPhysicalDeviceExtendedDynamicStateFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT);
+	requested_extended_dynamic_state_feature.extendedDynamicState = VK_TRUE;
+
 	// Tessellation shader support is required for this example
 	auto &requested_features = gpu.get_mutable_requested_features();
 	if (gpu.get_features().tessellationShader)
@@ -592,6 +667,16 @@ void ExtendedDynamicState2::request_gpu_features(vkb::PhysicalDevice &gpu)
 	{
 		throw vkb::VulkanException(VK_ERROR_FEATURE_NOT_PRESENT, "Selected GPU does not support tessellation shaders!");
 	}
+
+	if (gpu.get_features().depthBiasClamp)
+	{
+		requested_features.depthBiasClamp = VK_TRUE;
+	}
+	else
+	{
+		throw vkb::VulkanException(VK_ERROR_FEATURE_NOT_PRESENT, "Selected GPU does not support depthBiasClamp!");
+	}
+
 
 	if (gpu.get_features().fillModeNonSolid)
 	{
@@ -608,15 +693,7 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 {
 	if (drawer.header("Settings"))
 	{
-		if (drawer.checkbox("Depth Bias Enable", &gui_settings.depth_bias_enable))
-		{
-			update_uniform_buffers();
-		}
 		if (drawer.checkbox("Primitive Restart Enable", &gui_settings.primitive_restart_enable))
-		{
-			update_uniform_buffers();
-		}
-		if (drawer.checkbox("Rasterizer Discard Enable", &gui_settings.rasterizer_discard_enable))
 		{
 			update_uniform_buffers();
 		}
@@ -640,6 +717,10 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 		{
 			update_uniform_buffers();
 		}
+		if (drawer.input_float("Light Intensity", &gui_settings.lightIntensity, 1.0f, 1))
+		{
+			update_uniform_buffers();
+		}
 		if (drawer.input_float("Patch Control Points", &gui_settings.patch_control_points_float, 1.0f, 1))
 		{
 			if (gui_settings.patch_control_points_float < 1)
@@ -655,6 +736,138 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 			build_command_buffers();
 		}
 	}
+	if (drawer.header("Models"))
+	{
+		int idx = 0;
+		const int length = 30;
+		char * tests[linear_scene_nodes.size()]{};
+		const char * indicators[] = {"1. ","2. ","3. ","4. ","5. ","6. ","7. ","8. ","9. ","10. ","11. ","12. "};
+
+		char temp[linear_scene_nodes.size()][length];
+		
+		idx = 4;
+		
+		//char * test = temp[0];
+		const char *col_names = {"Index"};
+		ImGui::Columns(2, col_names);
+		ImGui::SetColumnWidth(0,100);
+		ImGui::ListBox("", &gui_settings.selected_obj, indicators, 12);
+		ImGui::NextColumn();
+		if (drawer.checkbox("Depth Bias Enable", &gui_settings.objects[gui_settings.selected_obj].depth_bias))
+		{
+			//update_visibility_buffer();
+		}
+		if (drawer.checkbox("Rasterizer Discard", &gui_settings.objects[gui_settings.selected_obj].rasterizer_discard))
+		{
+			//update_visibility_buffer();
+		}
+	}
+	
+}
+
+void ExtendedDynamicState2::update(float delta_time)
+{
+	static float time_pass = 0;
+	time_pass += delta_time;
+	static glm::vec3 translation = linear_scene_nodes.at(get_node_index("z_fight_1")).node->get_transform().get_translation();
+	static float difference = 0;
+	static bool rising = true;
+
+	if(time_pass > 0.05)
+	{
+		if(difference < -0.030)
+		{
+			rising = true;
+		}
+		else if (difference > 0.030)
+		{
+			rising = false;
+		}
+		
+		if(rising == true)
+		{
+			translation.x += 0.0005;
+			difference += 0.0005;
+		}
+		else
+		{
+			translation.x -= 0.0005;
+			difference -= 0.0005;
+		}
+		time_pass = 0;
+		for (uint32_t i = 0; i < linear_scene_nodes.size(); i++)
+		{
+			if (linear_scene_nodes.at(i).node->get_name() == "z_fight_1")
+			{
+				linear_scene_nodes.at(i).node->get_transform().set_translation(translation);
+				break;
+			}
+		}
+		gui_settings.time_tick = true;
+		build_command_buffers();
+	}
+
+	ApiVulkanSample::update(delta_time);
+	
+}
+
+uint32_t ExtendedDynamicState2::get_node_index(std::string name)
+{
+	uint32_t i = 0;
+	for ( i = 0; i < linear_scene_nodes.size(); i++)
+	{
+		if (linear_scene_nodes.at(i).node->get_name() == name)
+		{
+			break;
+		}
+	}
+	return i;
+}
+
+void ExtendedDynamicState2::selection_indicator(const vkb::sg::PBRMaterial *original_mat, vkb::sg::PBRMaterial *new_mat)
+{
+	static bool rise = false;
+	static int previous_obj_id = gui_settings.selected_obj;
+	static const vkb::sg::PBRMaterial * previous_material = original_mat;
+	static float accumulated_diff = 0.0;
+
+	new_mat->base_color_factor = original_mat->base_color_factor;
+	new_mat->alpha_mode = vkb::sg::AlphaMode::Blend;
+
+	if(rise == true)
+	{
+		if(gui_settings.time_tick == true)
+		{
+			accumulated_diff += 0.075;
+			gui_settings.time_tick = false;
+		}
+		new_mat->base_color_factor.w += accumulated_diff;
+	}
+	else
+	{
+		if(gui_settings.time_tick == true)
+		{
+			accumulated_diff -= 0.075;
+			gui_settings.time_tick = false;
+		}
+		new_mat->base_color_factor.w += accumulated_diff;
+	}
+
+	if(previous_obj_id != gui_settings.selected_obj)
+	{
+		accumulated_diff = 0.0;
+		previous_obj_id = gui_settings.selected_obj;
+	}
+
+	if(new_mat->base_color_factor.w < 0.3)
+	{
+		rise = true;
+	}
+	else if(new_mat->base_color_factor.w > 0.98)
+	{
+		rise = false;
+	}
+
 }
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2()

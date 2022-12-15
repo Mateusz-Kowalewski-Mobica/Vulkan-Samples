@@ -224,7 +224,7 @@ void VertexDynamicState::create_pipeline()
 	pipeline_create.depthAttachmentFormat   = depth_format;
 	pipeline_create.stencilAttachmentFormat = depth_format;
 
-	/* Initialize vertex input binding and attributes structures  */
+	/* Initialize vertex input binding and attributes structures */
 
 	vertex_bindings_description_ext[0] = vkb::initializers::vertex_input_binding_description2ext(
 	    0,
@@ -588,10 +588,5 @@ void VertexDynamicState::model_data_creation()
 
 std::unique_ptr<vkb::VulkanSample> create_vertex_dynamic_state()
 {
-<<<<<<< HEAD
-	return std::make_unique<vertex_dynamic_state>();
-}
-=======
 	return std::make_unique<VertexDynamicState>();
 }
->>>>>>> origin/master
