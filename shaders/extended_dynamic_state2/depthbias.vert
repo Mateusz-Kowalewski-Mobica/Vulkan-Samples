@@ -23,12 +23,10 @@ layout(binding = 0) uniform UBO
 {
     mat4 projection;
     mat4 view;
-    mat4 skybox_modelview;
     vec4 ambientLightColor;
     vec3 lightPosition;
     vec4 lightColor;
     float lightIntensity;
-    float modelscale;
 }ubo;
 
 layout(push_constant) uniform Push_Constants {
@@ -59,7 +57,6 @@ void main()
     outNormal = mat3(ubo.view * push_constants.model) * inNormal;
     vec4 positionWorld =   push_constants.model *  vec4(inPos, 1.0);
     outLightVec = ubo.lightPosition - positionWorld.xyz;
-   // vec3 test = apply_point_light(ubo.light, positionWorld.xyz, normalize(outNormal));
     outLightColor[0] = ubo.lightColor.xyz * ubo.lightColor.w;
     outLightColor[1] = ubo.ambientLightColor.xyz * ubo.ambientLightColor.w;
     outViewVec = -localPos.xyz;

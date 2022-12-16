@@ -18,15 +18,11 @@
 #pragma once
 
 #include "api_vulkan_sample.h"
-#include "geometry/frustum.h"
 #include "scene_graph/components/pbr_material.h"
 
 class ExtendedDynamicState2 : public ApiVulkanSample
 {
   public:
-
-
-
 	std::vector<std::string> logic_op_object_names{"CLEAR",
 	                                               "AND",
 	                                               "AND_REVERSE",
@@ -51,87 +47,76 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		Texture displace;
 	} textures;
 
-  	typedef struct 
+	typedef struct
 	{
-		bool depth_bias = false;
-		bool primitive_restart = true;
+		bool depth_bias         = false;
 		bool rasterizer_discard = false;
-		std::string name;
 	} model_dynamic_param;
 
-		struct
+	struct
 	{
-		bool      primitive_restart_enable  = false;
-		bool      tessellation              = false;
-		float     tess_factor               = 1.0;
-		int32_t   logic_op_index{};
-		VkLogicOp logicOp = VK_LOGIC_OP_CLEAR;
-		float     patch_control_points_float{4.0f};
-		uint32_t  patch_control_points{4};
-		float     lightX{0};
-		float     lightY{0};
-		float     lightZ{0};
-		float	  lightIntensity;
-
+		bool                             primitive_restart_enable = false;
+		bool                             tessellation             = false;
+		float                            tess_factor              = 1.0;
+		int32_t                          logic_op_index{};
+		VkLogicOp                        logicOp = VK_LOGIC_OP_CLEAR;
+		float                            patch_control_points_float{4.0f};
+		uint32_t                         patch_control_points{4};
 		std::vector<model_dynamic_param> objects;
-		int selected_obj = 0;
-		bool time_tick = false;
+		int                              selected_obj     = 0;
+		bool                             selection_active = true;
+		bool                             time_tick        = false;
 	} gui_settings;
 
 	struct UBOVS
 	{
 		glm::mat4 projection;
 		glm::mat4 view;
-		glm::mat4 skybox_modelview;
 		glm::vec4 ambientLightColor{1.f, 1.f, 1.f, 0.1f};
-		glm::vec3 lightPosition{0.0f, 0.f, 0.f};
+		glm::vec3 lightPosition{3.0f, 8.f, -6.f};
 		glm::vec4 lightColor{1.f};
-		float     lightIntensity{1.0f};
-		float     modelscale = 0.25f;
+		float     lightIntensity{80.0f};
 	} ubo_vs;
 
 	struct UBOTESS
 	{
 		glm::mat4 projection;
 		glm::mat4 modelview;
-		glm::vec4 light_pos = glm::vec4(-48.0f, -40.0f, 46.0f, 0.0f);
-		glm::vec4 frustum_planes[6];
+		glm::vec4 light_pos           = glm::vec4(-48.0f, -40.0f, 46.0f, 0.0f);
 		float     displacement_factor = 32.0f;
 		float     tessellation_factor = 0.75f;
-		glm::vec2 viewport_dim;
-		// Desired size of tessellated quad patch edge
-		float tessellated_edge_size = 20.0f;
-		float modelscale            = 0.15f;
 	} ubo_tess;
 
 	struct
 	{
-		VkDescriptorSetLayout skybox{VK_NULL_HANDLE};
+		VkDescriptorSetLayout baseline{VK_NULL_HANDLE};
 		VkDescriptorSetLayout model{VK_NULL_HANDLE};
 	} descriptor_set_layouts;
 
 	struct
 	{
-		VkPipelineLayout skybox{VK_NULL_HANDLE};
+		VkPipelineLayout baseline{VK_NULL_HANDLE};
 		VkPipelineLayout model{VK_NULL_HANDLE};
 	} pipeline_layouts;
 
 	struct
 	{
-		VkDescriptorSet skybox{VK_NULL_HANDLE};
+		VkDescriptorSet baseline{VK_NULL_HANDLE};
 		VkDescriptorSet model{VK_NULL_HANDLE};
 	} descriptor_sets;
 
 	struct
 	{
+		VkPipeline baseline{VK_NULL_HANDLE};
+		VkPipeline tesselation{VK_NULL_HANDLE};
+	} pipeline;
+
+	struct
+	{
 		std::unique_ptr<vkb::core::Buffer> model_tessellation;
-		std::unique_ptr<vkb::core::Buffer> skybox;
+		std::unique_ptr<vkb::core::Buffer> baseline;
 	} uniform_buffers;
 
-	//VkPipelineLayout                                   pipeline_layout{VK_NULL_HANDLE};
-	VkPipeline                                         model_pipeline{VK_NULL_HANDLE};
-	VkPipeline                                         skybox_pipeline{VK_NULL_HANDLE};
-	VkPipeline                                         light_indicator_pipeline{VK_NULL_HANDLE};
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT   extended_dynamic_state2_features{};
 	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphics_pipeline_library{};
 
@@ -148,19 +133,8 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		vkb::sg::Node *   node;
 		vkb::sg::SubMesh *sub_mesh;
 	};
-	std::vector<SceneNode>             linear_scene_nodes;
-	std::vector<int32_t>               visibility_list;
-	std::unique_ptr<vkb::core::Buffer> visibility_buffer;
-
-	//VkDescriptorSet       descriptor_set{VK_NULL_HANDLE};
-	//VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
-	VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
-
-	std::unique_ptr<vkb::sg::SubMesh> skybox;
-	std::unique_ptr<vkb::sg::SubMesh> object;
-	std::unique_ptr<vkb::sg::SubMesh> plane;
-	std::unique_ptr<vkb::sg::SubMesh> lightIndicator;
-	vkb::Frustum                      frustum;
+	std::vector<SceneNode> scene_nodes[3];
+	VkDescriptorPool       descriptor_pool{VK_NULL_HANDLE};
 
 	ExtendedDynamicState2();
 	~ExtendedDynamicState2();
@@ -178,20 +152,13 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void create_pipeline();
 	void draw();
 
-	void load_assets();
-	void create_descriptor_pool();
-	void setup_descriptor_set_layout();
-	void create_descriptor_sets();
-	uint32_t get_node_index(std::string name);
-	void selection_indicator(const vkb::sg::PBRMaterial *original_mat, vkb::sg::PBRMaterial *new_mat);
-
-#if VK_NO_PROTOTYPES
-	PFN_vkCmdSetDepthBiasEnableEXT         vkCmdSetDepthBiasEnableEXT{VK_NULL_HANDLE};
-	PFN_vkCmdSetLogicOpEXT                 vkCmdSetLogicOpEXT{VK_NULL_HANDLE};
-	PFN_vkCmdSetPatchControlPointsEXT      vkCmdSetPatchControlPointsEXT{VK_NULL_HANDLE};
-	PFN_vkCmdSetPrimitiveRestartEnableEXT  vkCmdSetPrimitiveRestartEnableEXT{VK_NULL_HANDLE};
-	PFN_vkCmdSetRasterizerDiscardEnableEXT vkCmdSetRasterizerDiscardEnableEXT{VK_NULL_HANDLE};
-#endif
+	void     load_assets();
+	void     create_descriptor_pool();
+	void     setup_descriptor_set_layout();
+	void     create_descriptor_sets();
+	uint32_t get_node_index(std::string name, std::vector<SceneNode> *scene_node);
+	void     selection_indicator(const vkb::sg::PBRMaterial *original_mat, vkb::sg::PBRMaterial *new_mat);
+	void     scene_pipeline_divide(std::vector<SceneNode> *scene_node);
 };
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2();
