@@ -107,6 +107,7 @@ void ExtendedDynamicState2::load_assets()
 	scene = loader.read_scene_from_file("scenes/Test_scene/Test_scene.gltf");
 	assert(scene);
 
+	std::vector<SceneNode> scene_elements;
 	// Store all scene nodes in a linear vector for easier access
 	for (auto &mesh : scene->get_components<vkb::sg::Mesh>())
 	{
@@ -116,12 +117,13 @@ void ExtendedDynamicState2::load_assets()
 			gui_settings.objects.push_back(object_param);
 			for (auto &sub_mesh : mesh->get_submeshes())
 			{
-				scene_nodes[EDS_PIPELINE_ALL_INDEX].push_back({mesh->get_name(), node, sub_mesh});
+				scene_elements.push_back({mesh->get_name(), node, sub_mesh});
 			}
 		}
 	}
+	scene_nodes.push_back(scene_elements);
 
-	scene_pipeline_divide(scene_nodes);
+	scene_pipeline_divide(&scene_nodes);
 }
 
 /**
@@ -169,7 +171,7 @@ void ExtendedDynamicState2::update_uniform_buffers()
 {
 	ubo_vs.projection = camera.matrices.perspective;
 	ubo_vs.view       = camera.matrices.view * glm::mat4(1.f);
-
+	//ubo_vs.lightIntensity = 0.5;
 	uniform_buffers.baseline->convert_and_update(ubo_vs);
 
 	// Tessellation
@@ -432,57 +434,65 @@ void ExtendedDynamicState2::build_command_buffers()
 
 		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.baseline);
 
-		uint32_t node_index = 0;
-		for (auto &node : scene_nodes[EDS_PIPELINE_BASELINE_INDEX])
-		{
-			const auto &vertex_buffer_pos    = node.sub_mesh->vertex_buffers.at("position");
-			const auto &vertex_buffer_normal = node.sub_mesh->vertex_buffers.at("normal");
-			auto &      index_buffer         = node.sub_mesh->index_buffer;
+		draw_from_scene(draw_cmd_buffers[i], &scene_nodes, EDS_PIPELINE_BASELINE_INDEX);
 
-			if (gui_settings.objects[node_index].depth_bias == true)
-			{
-				vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_TRUE);
-			}
-			else
-			{
-				vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_FALSE);
-			}
+		vkCmdBindDescriptorSets(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.model, 0, 1, &descriptor_sets.model, 0, nullptr);
 
-			if (gui_settings.objects[node_index].rasterizer_discard == true)
-			{
-				vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_TRUE);
-			}
-			else
-			{
-				vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_FALSE);
-			}
+		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.tesselation);
+		vkCmdSetPatchControlPointsEXT(draw_cmd_buffers[i], gui_settings.patch_control_points);
+		draw_from_scene(draw_cmd_buffers[i], &scene_nodes, EDS_PIPELINE_TESS_INDEX);
 
-			// Pass data for the current node via push commands
-			auto test                     = node.sub_mesh->get_material();
-			auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node.sub_mesh->get_material());
-			push_const_block.model_matrix = node.node->get_transform().get_world_matrix();
-			if (node.node->get_id() != gui_settings.selected_obj ||
-			    gui_settings.selection_active == false)
-			{
-				push_const_block.color = node_material->base_color_factor;
-			}
-			else
-			{
-				vkb::sg::PBRMaterial temp_material{"Selected_Material"};
-				selection_indicator(node_material, &temp_material);
-				push_const_block.color = temp_material.base_color_factor;
-			}
-			vkCmdPushConstants(draw_cmd_buffers[i], pipeline_layouts.baseline, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
+		// uint32_t node_index = 0;
+		// for (auto &node : scene_nodes[EDS_PIPELINE_BASELINE_INDEX])
+		// {
+		// 	const auto &vertex_buffer_pos    = node.sub_mesh->vertex_buffers.at("position");
+		// 	const auto &vertex_buffer_normal = node.sub_mesh->vertex_buffers.at("normal");
+		// 	auto &      index_buffer         = node.sub_mesh->index_buffer;
 
-			VkDeviceSize offsets[1] = {0};
-			vkCmdBindVertexBuffers(draw_cmd_buffers[i], 0, 1, vertex_buffer_pos.get(), offsets);
-			vkCmdBindVertexBuffers(draw_cmd_buffers[i], 1, 1, vertex_buffer_normal.get(), offsets);
-			vkCmdBindIndexBuffer(draw_cmd_buffers[i], index_buffer->get_handle(), 0, node.sub_mesh->index_type);
+		// 	if (gui_settings.objects[node_index].depth_bias == true)
+		// 	{
+		// 		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_TRUE);
+		// 	}
+		// 	else
+		// 	{
+		// 		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_FALSE);
+		// 	}
 
-			vkCmdDrawIndexed(draw_cmd_buffers[i], node.sub_mesh->vertex_indices, 1, 0, 0, 0);
+		// 	if (gui_settings.objects[node_index].rasterizer_discard == true)
+		// 	{
+		// 		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_TRUE);
+		// 	}
+		// 	else
+		// 	{
+		// 		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_FALSE);
+		// 	}
 
-			node_index++;
-		}
+		// 	// Pass data for the current node via push commands
+		// 	auto test                     = node.sub_mesh->get_material();
+		// 	auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node.sub_mesh->get_material());
+		// 	push_const_block.model_matrix = node.node->get_transform().get_world_matrix();
+		// 	if (node.node->get_id() != gui_settings.selected_obj ||
+		// 	    gui_settings.selection_active == false)
+		// 	{
+		// 		push_const_block.color = node_material->base_color_factor;
+		// 	}
+		// 	else
+		// 	{
+		// 		vkb::sg::PBRMaterial temp_material{"Selected_Material"};
+		// 		selection_indicator(node_material, &temp_material);
+		// 		push_const_block.color = temp_material.base_color_factor;
+		// 	}
+		// 	vkCmdPushConstants(draw_cmd_buffers[i], pipeline_layouts.baseline, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
+
+		// 	VkDeviceSize offsets[1] = {0};
+		// 	vkCmdBindVertexBuffers(draw_cmd_buffers[i], 0, 1, vertex_buffer_pos.get(), offsets);
+		// 	vkCmdBindVertexBuffers(draw_cmd_buffers[i], 1, 1, vertex_buffer_normal.get(), offsets);
+		// 	vkCmdBindIndexBuffer(draw_cmd_buffers[i], index_buffer->get_handle(), 0, node.sub_mesh->index_type);
+
+		// 	vkCmdDrawIndexed(draw_cmd_buffers[i], node.sub_mesh->vertex_indices, 1, 0, 0, 0);
+
+		// 	node_index++;
+		// }
 
 		/* UI */
 		draw_ui(draw_cmd_buffers[i]);
@@ -570,6 +580,7 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 
 	pipeline_layout_create_info.pSetLayouts    = &descriptor_set_layouts.model;
 	pipeline_layout_create_info.setLayoutCount = 1;
+	push_constant_range.stageFlags = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &pipeline_layouts.model));
 }
 
@@ -810,20 +821,82 @@ void ExtendedDynamicState2::selection_indicator(const vkb::sg::PBRMaterial *orig
 	}
 }
 
-void ExtendedDynamicState2::scene_pipeline_divide(std::vector<SceneNode> *scene_node)
+void ExtendedDynamicState2::scene_pipeline_divide(std::vector<std::vector<SceneNode>> *scene_node)
 {
-	int scene_nodes_cnt = scene_node[EDS_PIPELINE_ALL_INDEX].size();
+	int scene_nodes_cnt = scene_node->at(EDS_PIPELINE_ALL_INDEX).size();
+
+	std::vector<SceneNode> scene_elements_baseline;
+	std::vector<SceneNode> scene_elements_tess;
 
 	for (int i = 0; i < scene_nodes_cnt; i++)
 	{
-		if (scene_node[EDS_PIPELINE_ALL_INDEX].at(i).name == "Suzanne")
+		if (scene_node->at(EDS_PIPELINE_ALL_INDEX).at(i).name == "Suzanne")
 		{
-			scene_node[EDS_PIPELINE_TESS_INDEX].push_back(scene_node[EDS_PIPELINE_ALL_INDEX].at(i));
+			scene_elements_tess.push_back(scene_node->at(EDS_PIPELINE_ALL_INDEX).at(i));
 		}
 		else
 		{
-			scene_node[EDS_PIPELINE_BASELINE_INDEX].push_back(scene_node[EDS_PIPELINE_ALL_INDEX].at(i));
+			scene_elements_baseline.push_back(scene_node->at(EDS_PIPELINE_ALL_INDEX).at(i));
 		}
+	}
+
+	scene_node->push_back(scene_elements_baseline);
+	scene_node->push_back(scene_elements_tess);
+
+}
+/* Dokończyć tą funkcję !!!!! #TODO  */
+void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, int scene_index)
+{
+	auto &node = scene_node->at(scene_index);
+	uint32_t scene_elements_cnt = scene_node->at(scene_index).size(); // TODO test if correct 
+
+	for(int i = 0 ; i < scene_elements_cnt ; i++)
+	{
+		const auto &vertex_buffer_pos    = node[i].sub_mesh->vertex_buffers.at("position");
+		const auto &vertex_buffer_normal = node[i].sub_mesh->vertex_buffers.at("normal");
+		auto &      index_buffer         = node[i].sub_mesh->index_buffer;
+
+		if (gui_settings.objects[i].depth_bias == true)
+		{
+			vkCmdSetDepthBiasEnableEXT(command_buffer, VK_TRUE);
+		}
+		else
+		{
+			vkCmdSetDepthBiasEnableEXT(command_buffer, VK_FALSE);
+		}
+
+		if (gui_settings.objects[i].rasterizer_discard == true)
+		{
+			vkCmdSetRasterizerDiscardEnableEXT(command_buffer, VK_TRUE);
+		}
+		else
+		{
+			vkCmdSetRasterizerDiscardEnableEXT(command_buffer, VK_FALSE);
+		}
+
+		// Pass data for the current node via push commands
+		auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node[i].sub_mesh->get_material());
+		push_const_block.model_matrix = node[i].node->get_transform().get_world_matrix();
+		if (i != gui_settings.selected_obj ||
+			gui_settings.selection_active == false)
+		{
+			push_const_block.color = node_material->base_color_factor;
+		}
+		else
+		{
+			vkb::sg::PBRMaterial temp_material{"Selected_Material"};
+			selection_indicator(node_material, &temp_material);
+			push_const_block.color = temp_material.base_color_factor;
+		}
+		vkCmdPushConstants(command_buffer, pipeline_layouts.baseline, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
+
+		VkDeviceSize offsets[1] = {0};
+		vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffer_pos.get(), offsets);
+		vkCmdBindVertexBuffers(command_buffer, 1, 1, vertex_buffer_normal.get(), offsets);
+		vkCmdBindIndexBuffer(command_buffer, index_buffer->get_handle(), 0, node[i].sub_mesh->index_type);
+
+		vkCmdDrawIndexed(command_buffer, node[i].sub_mesh->vertex_indices, 1, 0, 0, 0);
+
 	}
 }
 

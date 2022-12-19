@@ -27,17 +27,16 @@ layout (set = 0, binding = 0) uniform UBO
 	mat4 projection;
 	mat4 modelview;
 	vec4 lightPos;
-	vec4 frustumPlanes[6];
 	float displacementFactor;
 	float tessellationFactor;
-	vec2 viewportDim;
-	float tessellatedEdgeSize;
-	float modelscale;
+
 } ubo; 
+
+
 
 void main(void)
 {
-	gl_Position = /*ubo.projection * ubo.modelview * */vec4(inPos, 1.0);
+	gl_Position =  vec4(inPos, 1.0);
 	outNormal = mat3(ubo.modelview) * inNormal;
 	outPos = inPos;
 	

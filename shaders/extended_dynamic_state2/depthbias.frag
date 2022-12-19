@@ -41,6 +41,6 @@ void main()
 	vec3 ambient = inLightColor[1];
 	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * vec3(0.75);
     //specular = vec3(0,0,0);
-	outColor0 = vec4((ambient + diffuse) * inColor.rgb + specular, inColor.a);		
+	outColor0 = vec4((ambient + diffuse) * inColor.rgb + (specular * inLightIntensity/20), inColor.a);		
 
 }

@@ -24,7 +24,7 @@ layout(binding = 0) uniform UBO
     mat4 projection;
     mat4 view;
     vec4 ambientLightColor;
-    vec3 lightPosition;
+    vec4 lightPosition;
     vec4 lightColor;
     float lightIntensity;
 }ubo;
@@ -56,12 +56,10 @@ void main()
     gl_Position = ubo.projection * localPos;
     outNormal = mat3(ubo.view * push_constants.model) * inNormal;
     vec4 positionWorld =   push_constants.model *  vec4(inPos, 1.0);
-    outLightVec = ubo.lightPosition - positionWorld.xyz;
+    outLightVec = ubo.lightPosition.xyz - positionWorld.xyz;
     outLightColor[0] = ubo.lightColor.xyz * ubo.lightColor.w;
     outLightColor[1] = ubo.ambientLightColor.xyz * ubo.ambientLightColor.w;
     outViewVec = -localPos.xyz;
     outLightIntensity = ubo.lightIntensity;
-    
-
    
 }
