@@ -61,7 +61,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		int32_t                          logic_op_index{};
 		VkLogicOp                        logicOp = VK_LOGIC_OP_CLEAR;
 		float                            patch_control_points_float{4.0f};
-		uint32_t                         patch_control_points{4};
+		uint32_t                         patch_control_points{3};
 		std::vector<model_dynamic_param> objects;
 		int                              selected_obj     = 0;
 		bool                             selection_active = true;
@@ -73,10 +73,10 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		alignas(16) glm::mat4 projection;
 		alignas(16) glm::mat4 view;
 		alignas(16) glm::vec4 ambientLightColor = glm::vec4(1.f, 1.f, 1.f, 0.1f);
-		alignas(16) glm::vec4 lightPosition = glm::vec4(3.0f, 8.0f, -6.0f, 1.0f);
+		alignas(16) glm::vec4 lightPosition     = glm::vec4(3.0f, 8.0f, -6.0f, 1.0f);
 		//glm::vec3 lightPosition{3.0f, 8.f, -6.f};
 		alignas(16) glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-		alignas(4) float     lightIntensity = 50.0f;
+		alignas(4) float lightIntensity  = 50.0f;
 	} ubo_vs;
 
 	struct UBOTESS
@@ -135,7 +135,14 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		vkb::sg::SubMesh *sub_mesh;
 	};
 	std::vector<std::vector<SceneNode>> scene_nodes;
-	VkDescriptorPool       descriptor_pool{VK_NULL_HANDLE};
+	VkDescriptorPool                    descriptor_pool{VK_NULL_HANDLE};
+
+	struct Cube
+	{
+		std::unique_ptr<vkb::core::Buffer> vertices;
+		std::unique_ptr<vkb::core::Buffer> indices;
+		uint32_t                           index_count;
+	} cube;
 
 	ExtendedDynamicState2();
 	~ExtendedDynamicState2();
@@ -160,7 +167,9 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	uint32_t get_node_index(std::string name, std::vector<SceneNode> *scene_node);
 	void     selection_indicator(const vkb::sg::PBRMaterial *original_mat, vkb::sg::PBRMaterial *new_mat);
 	void     scene_pipeline_divide(std::vector<std::vector<SceneNode>> *scene_node);
-	void 	 draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, int scene_index);
+	void     draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, int scene_index);
+	void     draw_created_model(VkCommandBuffer commandBuffer);
+	void     model_data_creation();
 };
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2();

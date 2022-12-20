@@ -431,68 +431,18 @@ void ExtendedDynamicState2::build_command_buffers()
 
 		/* One descriptor set is used, and the draw type is toggled by a specialization constant */
 		vkCmdBindDescriptorSets(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.baseline, 0, 1, &descriptor_sets.baseline, 0, nullptr);
-
 		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.baseline);
 
 		draw_from_scene(draw_cmd_buffers[i], &scene_nodes, EDS_PIPELINE_BASELINE_INDEX);
 
+		draw_created_model(draw_cmd_buffers[i]);
+
 		vkCmdBindDescriptorSets(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.model, 0, 1, &descriptor_sets.model, 0, nullptr);
-
 		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.tesselation);
+
 		vkCmdSetPatchControlPointsEXT(draw_cmd_buffers[i], gui_settings.patch_control_points);
+
 		draw_from_scene(draw_cmd_buffers[i], &scene_nodes, EDS_PIPELINE_TESS_INDEX);
-
-		// uint32_t node_index = 0;
-		// for (auto &node : scene_nodes[EDS_PIPELINE_BASELINE_INDEX])
-		// {
-		// 	const auto &vertex_buffer_pos    = node.sub_mesh->vertex_buffers.at("position");
-		// 	const auto &vertex_buffer_normal = node.sub_mesh->vertex_buffers.at("normal");
-		// 	auto &      index_buffer         = node.sub_mesh->index_buffer;
-
-		// 	if (gui_settings.objects[node_index].depth_bias == true)
-		// 	{
-		// 		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_TRUE);
-		// 	}
-		// 	else
-		// 	{
-		// 		vkCmdSetDepthBiasEnableEXT(draw_cmd_buffers[i], VK_FALSE);
-		// 	}
-
-		// 	if (gui_settings.objects[node_index].rasterizer_discard == true)
-		// 	{
-		// 		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_TRUE);
-		// 	}
-		// 	else
-		// 	{
-		// 		vkCmdSetRasterizerDiscardEnableEXT(draw_cmd_buffers[i], VK_FALSE);
-		// 	}
-
-		// 	// Pass data for the current node via push commands
-		// 	auto test                     = node.sub_mesh->get_material();
-		// 	auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node.sub_mesh->get_material());
-		// 	push_const_block.model_matrix = node.node->get_transform().get_world_matrix();
-		// 	if (node.node->get_id() != gui_settings.selected_obj ||
-		// 	    gui_settings.selection_active == false)
-		// 	{
-		// 		push_const_block.color = node_material->base_color_factor;
-		// 	}
-		// 	else
-		// 	{
-		// 		vkb::sg::PBRMaterial temp_material{"Selected_Material"};
-		// 		selection_indicator(node_material, &temp_material);
-		// 		push_const_block.color = temp_material.base_color_factor;
-		// 	}
-		// 	vkCmdPushConstants(draw_cmd_buffers[i], pipeline_layouts.baseline, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
-
-		// 	VkDeviceSize offsets[1] = {0};
-		// 	vkCmdBindVertexBuffers(draw_cmd_buffers[i], 0, 1, vertex_buffer_pos.get(), offsets);
-		// 	vkCmdBindVertexBuffers(draw_cmd_buffers[i], 1, 1, vertex_buffer_normal.get(), offsets);
-		// 	vkCmdBindIndexBuffer(draw_cmd_buffers[i], index_buffer->get_handle(), 0, node.sub_mesh->index_type);
-
-		// 	vkCmdDrawIndexed(draw_cmd_buffers[i], node.sub_mesh->vertex_indices, 1, 0, 0, 0);
-
-		// 	node_index++;
-		// }
 
 		/* UI */
 		draw_ui(draw_cmd_buffers[i]);
@@ -898,6 +848,134 @@ void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std:
 		vkCmdDrawIndexed(command_buffer, node[i].sub_mesh->vertex_indices, 1, 0, 0, 0);
 
 	}
+}
+
+void ExtendedDynamicState2::draw_created_model(VkCommandBuffer commandBuffer)
+{
+	VkDeviceSize offsets[1] = {0};
+	push_const_block.model_matrix = glm::mat4{1.0f};
+	vkCmdPushConstants(commandBuffer, pipeline_layouts.baseline, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, cube.vertices->get(), offsets);
+	vkCmdBindIndexBuffer(commandBuffer, cube.indices->get_handle(), 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(commandBuffer, cube.index_count, 1, 0, 0, 0);
+}
+
+void ExtendedDynamicState2::model_data_creation()
+{
+	constexpr uint32_t                     vertex_count = 8;
+	std::array<Vertex, vertex_count> vertices;
+
+	vertices[0].pos = {0.0f, 0.0f, 0.0f};
+	vertices[1].pos = {1.0f, 0.0f, 0.0f};
+	vertices[2].pos = {1.0f, 1.0f, 0.0f};
+	vertices[3].pos = {0.0f, 1.0f, 0.0f};
+	vertices[4].pos = {0.0f, 0.0f, 1.0f};
+	vertices[5].pos = {1.0f, 0.0f, 1.0f};
+	vertices[6].pos = {1.0f, 1.0f, 1.0f};
+	vertices[7].pos = {0.0f, 1.0f, 1.0f};
+
+	/* Normalized normal vectors for each face of cube */
+	glm::vec3 Xp = {1.0, 0.0, 0.0};
+	glm::vec3 Xm = {-1.0, 0.0, 0.0};
+	glm::vec3 Yp = {0.0, 1.0, 0.0};
+	glm::vec3 Ym = {0.0, -1.0, 0.0};
+	glm::vec3 Zp = {0.0, 0.0, 1.0};
+	glm::vec3 Zm = {0.0, 0.0, -1.0};
+
+	/* Normalized normal vectors for each vertex (created by sum of corresponding faces) */
+	vertices[0].normal = glm::normalize(Xm + Ym + Zm);
+	vertices[1].normal = glm::normalize(Xp + Ym + Zm);
+	vertices[2].normal = glm::normalize(Xp + Yp + Zm);
+	vertices[3].normal = glm::normalize(Xm + Yp + Zm);
+	vertices[4].normal = glm::normalize(Xm + Ym + Zp);
+	vertices[5].normal = glm::normalize(Xp + Ym + Zp);
+	vertices[6].normal = glm::normalize(Xp + Yp + Zp);
+	vertices[7].normal = glm::normalize(Xm + Yp + Zp);
+
+
+	/* Scaling and position transform */
+	for (uint8_t i = 0; i < vertex_count; i++)
+	{
+		vertices[i].pos *= glm::vec3(10.0f, 10.0f, 10.0f);
+		vertices[i].pos -= glm::vec3(5.0f, 5.0f, 5.0f);
+	}
+
+	constexpr uint32_t index_count        = 29;
+	uint32_t           vertex_buffer_size = vertex_count * sizeof(Vertex);
+	uint32_t           index_buffer_size  = index_count * sizeof(uint32_t);
+	cube.index_count                      = index_count;
+
+	/* Array with vertices indexes for corresponding triangles */
+	std::array<uint32_t, index_count> indices{0, 4, 3, 7,
+	                                          0xFFFFFFFF,
+											  1, 0, 2, 3,
+											  0xFFFFFFFF,
+											  2, 6, 1, 5,
+											  0xFFFFFFFF,
+											  1, 5, 0, 4,
+											  0xFFFFFFFF,
+											  4, 5, 7, 6,
+											  0xFFFFFFFF,
+											  2, 3, 6, 7,};
+
+	struct
+	{
+		VkBuffer       buffer;
+		VkDeviceMemory memory;
+	} vertex_staging, index_staging;
+
+	vertex_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    vertex_buffer_size,
+	    &vertex_staging.memory,
+	    vertices.data());
+
+	index_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    index_buffer_size,
+	    &index_staging.memory,
+	    indices.data());
+
+	cube.vertices = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                    vertex_buffer_size,
+	                                                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                    VMA_MEMORY_USAGE_GPU_ONLY);
+
+	cube.indices = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                   index_buffer_size,
+	                                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                   VMA_MEMORY_USAGE_GPU_ONLY);
+
+	/* Copy from staging buffers */
+	VkCommandBuffer copy_command = device->create_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+	VkBufferCopy copy_region = {};
+
+	copy_region.size = vertex_buffer_size;
+	vkCmdCopyBuffer(
+	    copy_command,
+	    vertex_staging.buffer,
+	    cube.vertices->get_handle(),
+	    1,
+	    &copy_region);
+
+	copy_region.size = index_buffer_size;
+	vkCmdCopyBuffer(
+	    copy_command,
+	    index_staging.buffer,
+	    cube.indices->get_handle(),
+	    1,
+	    &copy_region);
+
+	device->flush_command_buffer(copy_command, queue, true);
+
+	vkDestroyBuffer(get_device().get_handle(), vertex_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), vertex_staging.memory, nullptr);
+	vkDestroyBuffer(get_device().get_handle(), index_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), index_staging.memory, nullptr);
+
 }
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2()
