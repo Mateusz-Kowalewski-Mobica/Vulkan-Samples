@@ -49,6 +49,7 @@ ExtendedDynamicState2::ExtendedDynamicState2()
 
 	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
+	add_device_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 }
 
 ExtendedDynamicState2::~ExtendedDynamicState2()
@@ -87,6 +88,7 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 	camera.set_perspective(EDS_CAM_PERS_FOV, (float) width / (float) height, EDS_CAM_PERS_ZNEAR, EDS_CAM_PERS_ZFAR);
 
 	load_assets();
+	model_data_creation();
 	prepare_uniform_buffers();
 	create_descriptor_pool();
 	setup_descriptor_set_layout();
@@ -277,6 +279,8 @@ void ExtendedDynamicState2::create_pipeline()
 	    VK_DYNAMIC_STATE_SCISSOR,
 	    VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT,
 	    VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT,
+	    VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY_EXT,
+	    VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE_EXT,
 	};
 	VkPipelineDynamicStateCreateInfo dynamic_state =
 	    vkb::initializers::pipeline_dynamic_state_create_info(
@@ -433,12 +437,20 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdBindDescriptorSets(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.baseline, 0, 1, &descriptor_sets.baseline, 0, nullptr);
 		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.baseline);
 
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffers[i], VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffers[i], VK_FALSE);
 		draw_from_scene(draw_cmd_buffers[i], &scene_nodes, EDS_PIPELINE_BASELINE_INDEX);
+
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffers[i], VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
+		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffers[i], VK_TRUE);
 
 		draw_created_model(draw_cmd_buffers[i]);
 
 		vkCmdBindDescriptorSets(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.model, 0, 1, &descriptor_sets.model, 0, nullptr);
 		vkCmdBindPipeline(draw_cmd_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.tesselation);
+
+		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffers[i], VK_FALSE);
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffers[i], VK_PRIMITIVE_TOPOLOGY_PATCH_LIST);
 
 		vkCmdSetPatchControlPointsEXT(draw_cmd_buffers[i], gui_settings.patch_control_points);
 
@@ -530,7 +542,7 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 
 	pipeline_layout_create_info.pSetLayouts    = &descriptor_set_layouts.model;
 	pipeline_layout_create_info.setLayoutCount = 1;
-	push_constant_range.stageFlags = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+	push_constant_range.stageFlags             = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &pipeline_layouts.model));
 }
 
@@ -620,10 +632,6 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 {
 	if (drawer.header("Settings"))
 	{
-		if (drawer.checkbox("Primitive Restart Enable", &gui_settings.primitive_restart_enable))
-		{
-			update_uniform_buffers();
-		}
 		if (drawer.checkbox("Tessellation Enable", &gui_settings.tessellation))
 		{
 			update_uniform_buffers();
@@ -670,46 +678,7 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 
 void ExtendedDynamicState2::update(float delta_time)
 {
-	static float time_pass = 0;
-	time_pass += delta_time;
-	static glm::vec3 translation = scene_nodes[EDS_PIPELINE_BASELINE_INDEX].at(get_node_index("z_fight_1", &scene_nodes[EDS_PIPELINE_BASELINE_INDEX])).node->get_transform().get_translation();
-	static float     difference  = 0;
-	static bool      rising      = true;
-
-	if (time_pass > 0.05)
-	{
-		if (difference < -0.030)
-		{
-			rising = true;
-		}
-		else if (difference > 0.030)
-		{
-			rising = false;
-		}
-
-		if (rising == true)
-		{
-			translation.x += 0.0005;
-			difference += 0.0005;
-		}
-		else
-		{
-			translation.x -= 0.0005;
-			difference -= 0.0005;
-		}
-		time_pass = 0;
-		for (uint32_t i = 0; i < scene_nodes[EDS_PIPELINE_BASELINE_INDEX].size(); i++)
-		{
-			if (scene_nodes[EDS_PIPELINE_BASELINE_INDEX].at(i).node->get_name() == "z_fight_1")
-			{
-				scene_nodes[EDS_PIPELINE_BASELINE_INDEX].at(i).node->get_transform().set_translation(translation);
-				break;
-			}
-		}
-		gui_settings.time_tick = true;
-		build_command_buffers();
-	}
-
+	cube_animation(delta_time);
 	ApiVulkanSample::update(delta_time);
 }
 
@@ -792,15 +761,14 @@ void ExtendedDynamicState2::scene_pipeline_divide(std::vector<std::vector<SceneN
 
 	scene_node->push_back(scene_elements_baseline);
 	scene_node->push_back(scene_elements_tess);
-
 }
-/* Dokończyć tą funkcję !!!!! #TODO  */
+
 void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, int scene_index)
 {
-	auto &node = scene_node->at(scene_index);
-	uint32_t scene_elements_cnt = scene_node->at(scene_index).size(); // TODO test if correct 
+	auto &   node               = scene_node->at(scene_index);
+	uint32_t scene_elements_cnt = scene_node->at(scene_index).size();        // TODO test if correct
 
-	for(int i = 0 ; i < scene_elements_cnt ; i++)
+	for (int i = 0; i < scene_elements_cnt; i++)
 	{
 		const auto &vertex_buffer_pos    = node[i].sub_mesh->vertex_buffers.at("position");
 		const auto &vertex_buffer_normal = node[i].sub_mesh->vertex_buffers.at("normal");
@@ -828,7 +796,7 @@ void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std:
 		auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node[i].sub_mesh->get_material());
 		push_const_block.model_matrix = node[i].node->get_transform().get_world_matrix();
 		if (i != gui_settings.selected_obj ||
-			gui_settings.selection_active == false)
+		    gui_settings.selection_active == false)
 		{
 			push_const_block.color = node_material->base_color_factor;
 		}
@@ -846,33 +814,34 @@ void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std:
 		vkCmdBindIndexBuffer(command_buffer, index_buffer->get_handle(), 0, node[i].sub_mesh->index_type);
 
 		vkCmdDrawIndexed(command_buffer, node[i].sub_mesh->vertex_indices, 1, 0, 0, 0);
-
 	}
 }
 
 void ExtendedDynamicState2::draw_created_model(VkCommandBuffer commandBuffer)
 {
 	VkDeviceSize offsets[1] = {0};
-	push_const_block.model_matrix = glm::mat4{1.0f};
+	push_const_block.color  = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f};
 	vkCmdPushConstants(commandBuffer, pipeline_layouts.baseline, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_const_block), &push_const_block);
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, cube.vertices->get(), offsets);
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, cube.vertices_pos->get(), offsets);
+	vkCmdBindVertexBuffers(commandBuffer, 1, 1, cube.vertices_norm->get(), offsets);
 	vkCmdBindIndexBuffer(commandBuffer, cube.indices->get_handle(), 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(commandBuffer, cube.index_count, 1, 0, 0, 0);
 }
 
 void ExtendedDynamicState2::model_data_creation()
 {
-	constexpr uint32_t                     vertex_count = 8;
-	std::array<Vertex, vertex_count> vertices;
+	constexpr uint32_t                  vertex_count = 8;
+	std::array<glm::vec3, vertex_count> vertices_pos;
+	std::array<glm::vec3, vertex_count> vertices_norm;
 
-	vertices[0].pos = {0.0f, 0.0f, 0.0f};
-	vertices[1].pos = {1.0f, 0.0f, 0.0f};
-	vertices[2].pos = {1.0f, 1.0f, 0.0f};
-	vertices[3].pos = {0.0f, 1.0f, 0.0f};
-	vertices[4].pos = {0.0f, 0.0f, 1.0f};
-	vertices[5].pos = {1.0f, 0.0f, 1.0f};
-	vertices[6].pos = {1.0f, 1.0f, 1.0f};
-	vertices[7].pos = {0.0f, 1.0f, 1.0f};
+	vertices_pos[0] = {0.0f, 0.0f, 0.0f};
+	vertices_pos[1] = {1.0f, 0.0f, 0.0f};
+	vertices_pos[2] = {1.0f, 1.0f, 0.0f};
+	vertices_pos[3] = {0.0f, 1.0f, 0.0f};
+	vertices_pos[4] = {0.0f, 0.0f, 1.0f};
+	vertices_pos[5] = {1.0f, 0.0f, 1.0f};
+	vertices_pos[6] = {1.0f, 1.0f, 1.0f};
+	vertices_pos[7] = {0.0f, 1.0f, 1.0f};
 
 	/* Normalized normal vectors for each face of cube */
 	glm::vec3 Xp = {1.0, 0.0, 0.0};
@@ -883,53 +852,59 @@ void ExtendedDynamicState2::model_data_creation()
 	glm::vec3 Zm = {0.0, 0.0, -1.0};
 
 	/* Normalized normal vectors for each vertex (created by sum of corresponding faces) */
-	vertices[0].normal = glm::normalize(Xm + Ym + Zm);
-	vertices[1].normal = glm::normalize(Xp + Ym + Zm);
-	vertices[2].normal = glm::normalize(Xp + Yp + Zm);
-	vertices[3].normal = glm::normalize(Xm + Yp + Zm);
-	vertices[4].normal = glm::normalize(Xm + Ym + Zp);
-	vertices[5].normal = glm::normalize(Xp + Ym + Zp);
-	vertices[6].normal = glm::normalize(Xp + Yp + Zp);
-	vertices[7].normal = glm::normalize(Xm + Yp + Zp);
-
+	vertices_norm[0] = glm::normalize(Xm + Ym + Zm);
+	vertices_norm[1] = glm::normalize(Xp + Ym + Zm);
+	vertices_norm[2] = glm::normalize(Xp + Yp + Zm);
+	vertices_norm[3] = glm::normalize(Xm + Yp + Zm);
+	vertices_norm[4] = glm::normalize(Xm + Ym + Zp);
+	vertices_norm[5] = glm::normalize(Xp + Ym + Zp);
+	vertices_norm[6] = glm::normalize(Xp + Yp + Zp);
+	vertices_norm[7] = glm::normalize(Xm + Yp + Zp);
 
 	/* Scaling and position transform */
 	for (uint8_t i = 0; i < vertex_count; i++)
 	{
-		vertices[i].pos *= glm::vec3(10.0f, 10.0f, 10.0f);
-		vertices[i].pos -= glm::vec3(5.0f, 5.0f, 5.0f);
+		vertices_pos[i] *= glm::vec3(2.0f, 2.0f, 2.0f);
+		vertices_pos[i] += glm::vec3(5.0f, 2.0f, 0.0f);
 	}
 
 	constexpr uint32_t index_count        = 29;
-	uint32_t           vertex_buffer_size = vertex_count * sizeof(Vertex);
+	uint32_t           vertex_buffer_size = vertex_count * sizeof(glm::vec3);
 	uint32_t           index_buffer_size  = index_count * sizeof(uint32_t);
 	cube.index_count                      = index_count;
 
 	/* Array with vertices indexes for corresponding triangles */
 	std::array<uint32_t, index_count> indices{0, 4, 3, 7,
-	                                          0xFFFFFFFF,
-											  1, 0, 2, 3,
-											  0xFFFFFFFF,
-											  2, 6, 1, 5,
-											  0xFFFFFFFF,
-											  1, 5, 0, 4,
-											  0xFFFFFFFF,
-											  4, 5, 7, 6,
-											  0xFFFFFFFF,
-											  2, 3, 6, 7,};
+	                                          UINT32_MAX,
+	                                          1, 0, 2, 3,
+	                                          UINT32_MAX,
+	                                          2, 6, 1, 5,
+	                                          UINT32_MAX,
+	                                          1, 5, 0, 4,
+	                                          UINT32_MAX,
+	                                          4, 5, 7, 6,
+	                                          UINT32_MAX,
+	                                          2, 3, 6, 7};
 
 	struct
 	{
 		VkBuffer       buffer;
 		VkDeviceMemory memory;
-	} vertex_staging, index_staging;
+	} vertex_pos_staging, vertex_norm_staging, index_staging;
 
-	vertex_staging.buffer = get_device().create_buffer(
+	vertex_pos_staging.buffer = get_device().create_buffer(
 	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 	    vertex_buffer_size,
-	    &vertex_staging.memory,
-	    vertices.data());
+	    &vertex_pos_staging.memory,
+	    vertices_pos.data());
+
+	vertex_norm_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    vertex_buffer_size,
+	    &vertex_norm_staging.memory,
+	    vertices_norm.data());
 
 	index_staging.buffer = get_device().create_buffer(
 	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -938,10 +913,15 @@ void ExtendedDynamicState2::model_data_creation()
 	    &index_staging.memory,
 	    indices.data());
 
-	cube.vertices = std::make_unique<vkb::core::Buffer>(get_device(),
-	                                                    vertex_buffer_size,
-	                                                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-	                                                    VMA_MEMORY_USAGE_GPU_ONLY);
+	cube.vertices_pos = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                        vertex_buffer_size,
+	                                                        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                        VMA_MEMORY_USAGE_GPU_ONLY);
+
+	cube.vertices_norm = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                         vertex_buffer_size,
+	                                                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                         VMA_MEMORY_USAGE_GPU_ONLY);
 
 	cube.indices = std::make_unique<vkb::core::Buffer>(get_device(),
 	                                                   index_buffer_size,
@@ -956,8 +936,15 @@ void ExtendedDynamicState2::model_data_creation()
 	copy_region.size = vertex_buffer_size;
 	vkCmdCopyBuffer(
 	    copy_command,
-	    vertex_staging.buffer,
-	    cube.vertices->get_handle(),
+	    vertex_pos_staging.buffer,
+	    cube.vertices_pos->get_handle(),
+	    1,
+	    &copy_region);
+
+	vkCmdCopyBuffer(
+	    copy_command,
+	    vertex_norm_staging.buffer,
+	    cube.vertices_norm->get_handle(),
 	    1,
 	    &copy_region);
 
@@ -971,11 +958,55 @@ void ExtendedDynamicState2::model_data_creation()
 
 	device->flush_command_buffer(copy_command, queue, true);
 
-	vkDestroyBuffer(get_device().get_handle(), vertex_staging.buffer, nullptr);
-	vkFreeMemory(get_device().get_handle(), vertex_staging.memory, nullptr);
+	vkDestroyBuffer(get_device().get_handle(), vertex_pos_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), vertex_pos_staging.memory, nullptr);
+	vkDestroyBuffer(get_device().get_handle(), vertex_norm_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), vertex_norm_staging.memory, nullptr);
 	vkDestroyBuffer(get_device().get_handle(), index_staging.buffer, nullptr);
 	vkFreeMemory(get_device().get_handle(), index_staging.memory, nullptr);
+}
 
+void ExtendedDynamicState2::cube_animation(float delta_time)
+{
+	static float time_pass = 0;
+	time_pass += delta_time;
+	static glm::vec3 translation = scene_nodes[EDS_PIPELINE_BASELINE_INDEX].at(get_node_index("z_fight_1", &scene_nodes[EDS_PIPELINE_BASELINE_INDEX])).node->get_transform().get_translation();
+	static float     difference  = 0;
+	static bool      rising      = true;
+
+	if (time_pass > 0.05)
+	{
+		if (difference < -0.030)
+		{
+			rising = true;
+		}
+		else if (difference > 0.030)
+		{
+			rising = false;
+		}
+
+		if (rising == true)
+		{
+			translation.x += 0.0005;
+			difference += 0.0005;
+		}
+		else
+		{
+			translation.x -= 0.0005;
+			difference -= 0.0005;
+		}
+		time_pass = 0;
+		for (uint32_t i = 0; i < scene_nodes[EDS_PIPELINE_BASELINE_INDEX].size(); i++)
+		{
+			if (scene_nodes[EDS_PIPELINE_BASELINE_INDEX].at(i).node->get_name() == "z_fight_1")
+			{
+				scene_nodes[EDS_PIPELINE_BASELINE_INDEX].at(i).node->get_transform().set_translation(translation);
+				break;
+			}
+		}
+		gui_settings.time_tick = true;
+		build_command_buffers();
+	}
 }
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2()

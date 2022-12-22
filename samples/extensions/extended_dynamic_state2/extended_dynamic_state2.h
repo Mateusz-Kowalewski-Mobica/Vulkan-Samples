@@ -60,7 +60,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		float                            tess_factor              = 1.0;
 		int32_t                          logic_op_index{};
 		VkLogicOp                        logicOp = VK_LOGIC_OP_CLEAR;
-		float                            patch_control_points_float{4.0f};
+		float                            patch_control_points_float{3.0f};
 		uint32_t                         patch_control_points{3};
 		std::vector<model_dynamic_param> objects;
 		int                              selected_obj     = 0;
@@ -139,7 +139,8 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	struct Cube
 	{
-		std::unique_ptr<vkb::core::Buffer> vertices;
+		std::unique_ptr<vkb::core::Buffer> vertices_pos;
+		std::unique_ptr<vkb::core::Buffer> vertices_norm;
 		std::unique_ptr<vkb::core::Buffer> indices;
 		uint32_t                           index_count;
 	} cube;
@@ -170,6 +171,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void     draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, int scene_index);
 	void     draw_created_model(VkCommandBuffer commandBuffer);
 	void     model_data_creation();
+	void     cube_animation(float delta_time);
 };
 
 std::unique_ptr<vkb::VulkanSample> create_extended_dynamic_state2();
