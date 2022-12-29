@@ -40,12 +40,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	                                               "NAND",
 	                                               "SET"};
 
-	struct
-	{
-		Texture envmap;
-		Texture terrain;
-		Texture displace;
-	} textures;
 
 	typedef struct
 	{
@@ -55,7 +49,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	struct
 	{
-		bool                             primitive_restart_enable = false;
 		bool                             tessellation             = false;
 		float                            tess_factor              = 1.0;
 		int32_t                          logic_op_index{};
@@ -70,13 +63,12 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	struct UBOVS
 	{
-		alignas(16) glm::mat4 projection;
-		alignas(16) glm::mat4 view;
-		alignas(16) glm::vec4 ambientLightColor = glm::vec4(1.f, 1.f, 1.f, 0.1f);
-		alignas(16) glm::vec4 lightPosition     = glm::vec4(3.0f, 8.0f, -6.0f, 1.0f);
-		//glm::vec3 lightPosition{3.0f, 8.f, -6.f};
-		alignas(16) glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-		alignas(4) float lightIntensity  = 50.0f;
+		glm::mat4 projection;
+		glm::mat4 view;
+		glm::vec4 ambientLightColor = glm::vec4(1.f, 1.f, 1.f, 0.1f);
+		glm::vec4 lightPosition     = glm::vec4(3.0f, 8.0f, -6.0f, 1.0f);
+		glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		float lightIntensity  = 50.0f;
 	} ubo_vs;
 
 	struct UBOTESS
@@ -84,26 +76,25 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		glm::mat4 projection;
 		glm::mat4 modelview;
 		glm::vec4 light_pos           = glm::vec4(-48.0f, -40.0f, 46.0f, 0.0f);
-		float     displacement_factor = 32.0f;
-		float     tessellation_factor = 0.75f;
+		float     tessellation_factor = 1.0f;
 	} ubo_tess;
 
 	struct
 	{
 		VkDescriptorSetLayout baseline{VK_NULL_HANDLE};
-		VkDescriptorSetLayout model{VK_NULL_HANDLE};
+		VkDescriptorSetLayout tesselation{VK_NULL_HANDLE};
 	} descriptor_set_layouts;
 
 	struct
 	{
 		VkPipelineLayout baseline{VK_NULL_HANDLE};
-		VkPipelineLayout model{VK_NULL_HANDLE};
+		VkPipelineLayout tesselation{VK_NULL_HANDLE};
 	} pipeline_layouts;
 
 	struct
 	{
 		VkDescriptorSet baseline{VK_NULL_HANDLE};
-		VkDescriptorSet model{VK_NULL_HANDLE};
+		VkDescriptorSet tesselation{VK_NULL_HANDLE};
 	} descriptor_sets;
 
 	struct
@@ -114,12 +105,10 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	struct
 	{
-		std::unique_ptr<vkb::core::Buffer> model_tessellation;
 		std::unique_ptr<vkb::core::Buffer> baseline;
+		std::unique_ptr<vkb::core::Buffer> tesselation;
 	} uniform_buffers;
 
-	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT   extended_dynamic_state2_features{};
-	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphics_pipeline_library{};
 
 	struct
 	{
@@ -157,7 +146,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	void prepare_uniform_buffers();
 	void update_uniform_buffers();
-	void prepare_visibility_buffer();
 	void create_pipeline();
 	void draw();
 
