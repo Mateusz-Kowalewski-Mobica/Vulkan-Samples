@@ -19,11 +19,7 @@
 layout(binding = 1) uniform samplerCube samplerEnvMap;
 
 layout(location = 0) in vec3 inUVW;
-layout(location = 1) in vec3 inPos;
-layout(location = 2) in vec3 inNormal;
-layout(location = 3) in vec3 inViewVec;
-layout(location = 4) in vec3 inLightVec;
-layout(location = 5) in mat4 inInvModelView;
+
 
 layout(location = 0) out vec4 outColor0;
 
@@ -37,15 +33,7 @@ void main()
 	vec3 normal = normalize(inUVW);
 	color       = texture(samplerEnvMap, normal);
 
-	// vec3 wViewVec = mat3(inInvModelView) * normalize(inViewVec);
-	// vec3 wNormal  = mat3(inInvModelView) * inNormal;
-	// color         = texture(samplerEnvMap, refract(-wViewVec, wNormal, 1.0 / 1.6));
-
-	// Color with manual exposure into attachment 0
 	const float exposure = 1.f;
 	outColor0.rgb        = vec3(1.0) - exp(-color.rgb * exposure);
 
-	// Bright parts for bloom into attachment 1
-	float l         = dot(outColor0.rgb, vec3(0.2126, 0.7152, 0.0722));
-	float threshold = 0.75;
 }

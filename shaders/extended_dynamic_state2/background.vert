@@ -23,22 +23,11 @@ layout(location = 1) in vec3 inNormal;
 layout(binding = 0) uniform UBO
 {
 	mat4  projection;
-	mat4  modelview;
-	mat4  skybox_modelview;
-	float modelscale;
-	float tessellatedEdgeSize;
-	float tessellationFactor;
-	float displacementFactor;
-	vec2 viewportDim;
-	vec4  frustumPlanes[6];
+	mat4  background_modelview;
 }ubo;
 
 layout(location = 0) out vec3 outUVW;
-layout(location = 1) out vec3 outPos;
-layout(location = 2) out vec3 outNormal;
-layout(location = 3) out vec3 outViewVec;
-layout(location = 4) out vec3 outLightVec;
-layout(location = 5) out mat4 outInvModelView;
+
 
 out gl_PerVertex
 {
@@ -48,15 +37,5 @@ out gl_PerVertex
 void main()
 {
 	outUVW = inPos;
-
-	outPos      = vec3(mat3(ubo.skybox_modelview) * inPos);
-	gl_Position = vec4(ubo.projection * vec4(outPos, 1.0));
-
-	outNormal = mat3(ubo.modelview) * inNormal;
-
-	outInvModelView = inverse(ubo.skybox_modelview);
-
-	vec3 lightPos = vec3(0.0f, -5.0f, 5.0f);
-	outLightVec   = lightPos.xyz - outPos.xyz;
-	outViewVec    = -outPos.xyz;
+	gl_Position = ubo.projection * vec4(mat3(ubo.background_modelview) * inPos, 1.0);
 }

@@ -40,36 +40,35 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	                                               "NAND",
 	                                               "SET"};
 
-
 	typedef struct
 	{
 		bool depth_bias         = false;
 		bool rasterizer_discard = false;
-	} model_dynamic_param;
+	} ModelDynamicParam;
 
 	struct
 	{
-		bool                             tessellation             = false;
-		float                            tess_factor              = 1.0;
-		int32_t                          logic_op_index{};
-		VkLogicOp                        logicOp = VK_LOGIC_OP_CLEAR;
-		float                            patch_control_points_float{3.0f};
-		uint32_t                         patch_control_points{3};
-		std::vector<model_dynamic_param> objects;
-		int                              selected_obj     = 0;
-		bool                             selection_active = true;
-		bool                             time_tick        = false;
+		bool                           tessellation = false;
+		float                          tess_factor  = 1.0;
+		int                            logic_op_index{};
+		VkLogicOp                      logicOp = VK_LOGIC_OP_CLEAR;
+		float                          patch_control_points_float{3.0f};
+		uint32_t                       patch_control_points{3};
+		std::vector<ModelDynamicParam> objects;
+		int                            selected_obj     = 0;
+		bool                           selection_active = true;
+		bool                           time_tick        = false;
 	} gui_settings;
 
-	struct UBOVS
+	struct UBOBAS
 	{
 		glm::mat4 projection;
 		glm::mat4 view;
 		glm::vec4 ambientLightColor = glm::vec4(1.f, 1.f, 1.f, 0.1f);
-		glm::vec4 lightPosition     = glm::vec4(3.0f, 8.0f, -6.0f, 1.0f);
-		glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-		float lightIntensity  = 50.0f;
-	} ubo_vs;
+		glm::vec4 lightPosition     = glm::vec4(-3.0f, -8.0f, 6.0f, -1.0f);
+		glm::vec4 lightColor        = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		float     lightIntensity    = 50.0f;
+	} ubo_baseline;
 
 	struct UBOTESS
 	{
@@ -79,36 +78,52 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		float     tessellation_factor = 1.0f;
 	} ubo_tess;
 
+	struct UBOBG
+	{
+		glm::mat4 projection;
+		glm::mat4 background_modelview;
+
+	} ubo_background;
+
 	struct
 	{
 		VkDescriptorSetLayout baseline{VK_NULL_HANDLE};
 		VkDescriptorSetLayout tesselation{VK_NULL_HANDLE};
+		VkDescriptorSetLayout background{VK_NULL_HANDLE};
 	} descriptor_set_layouts;
 
 	struct
 	{
 		VkPipelineLayout baseline{VK_NULL_HANDLE};
 		VkPipelineLayout tesselation{VK_NULL_HANDLE};
+		VkPipelineLayout background{VK_NULL_HANDLE};
 	} pipeline_layouts;
 
 	struct
 	{
 		VkDescriptorSet baseline{VK_NULL_HANDLE};
 		VkDescriptorSet tesselation{VK_NULL_HANDLE};
+		VkDescriptorSet background{VK_NULL_HANDLE};
 	} descriptor_sets;
 
 	struct
 	{
 		VkPipeline baseline{VK_NULL_HANDLE};
 		VkPipeline tesselation{VK_NULL_HANDLE};
+		VkPipeline background{VK_NULL_HANDLE};
 	} pipeline;
 
 	struct
 	{
 		std::unique_ptr<vkb::core::Buffer> baseline;
 		std::unique_ptr<vkb::core::Buffer> tesselation;
+		std::unique_ptr<vkb::core::Buffer> background;
 	} uniform_buffers;
 
+	struct
+	{
+		Texture envmap;
+	} textures;
 
 	struct
 	{
@@ -122,9 +137,19 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		std::string       name;
 		vkb::sg::Node *   node;
 		vkb::sg::SubMesh *sub_mesh;
+		int               offset = 0;
 	};
 	std::vector<std::vector<SceneNode>> scene_nodes;
-	VkDescriptorPool                    descriptor_pool{VK_NULL_HANDLE};
+	typedef enum
+	{
+		SCENE_ALL_OBJ_INDEX = 0,
+		SCENE_BASELINE_OBJ_INDEX,
+		SCENE_TESSELLATION_OBJ_INDEX
+	} sceneObjType_t;
+
+	std::unique_ptr<vkb::sg::SubMesh> background_model;
+
+	VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
 
 	struct Cube
 	{
@@ -156,7 +181,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	uint32_t get_node_index(std::string name, std::vector<SceneNode> *scene_node);
 	void     selection_indicator(const vkb::sg::PBRMaterial *original_mat, vkb::sg::PBRMaterial *new_mat);
 	void     scene_pipeline_divide(std::vector<std::vector<SceneNode>> *scene_node);
-	void     draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, int scene_index);
+	void     draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, sceneObjType_t scene_index);
 	void     draw_created_model(VkCommandBuffer commandBuffer);
 	void     model_data_creation();
 	void     cube_animation(float delta_time);
