@@ -269,7 +269,7 @@ Demonstrate how to do conditional rendering, dynamically discarding rendering co
 Demonstrate how to use vertex input bindings and attribute descriptions dynamically, which can reduce the number of pipeline objects that are need to be created.
 
 
-### [Extended dynamic state 2] (./extensions/extended_dynamic_state2)
+### [Extended dynamic state 2](./extensions/extended_dynamic_state2)
 **Extension**: [```VK_EXT_extended_dynamic_state2```](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_extended_dynamic_state2.html)
 <br/>
 Demonstrate how to use depth bias, primitive restart, rasterizer discard, patch control points and logical operations dynamically, which can reduce the number of pipeline objects that are need to be created.
