@@ -167,6 +167,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	virtual void request_gpu_features(vkb::PhysicalDevice &gpu) override;
 	virtual void on_update_ui_overlay(vkb::Drawer &drawer) override;
 	virtual void update(float delta_time) override;
+	
 
 	void prepare_uniform_buffers();
 	void update_uniform_buffers();

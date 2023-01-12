@@ -114,6 +114,7 @@ class ComputeNBody : public ApiVulkanSample
 	bool         prepare(vkb::Platform &platform) override;
 	virtual void render(float delta_time) override;
 	virtual bool resize(const uint32_t width, const uint32_t height) override;
+	virtual void create_render_context(vkb::Platform &platform) override; 
 };
 
 std::unique_ptr<vkb::Application> create_compute_nbody();

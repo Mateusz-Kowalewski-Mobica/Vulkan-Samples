@@ -88,7 +88,7 @@ void ComputeNBody::build_command_buffers()
 	VkCommandBufferBeginInfo command_buffer_begin_info = vkb::initializers::command_buffer_begin_info();
 
 	VkClearValue clear_values[2];
-	clear_values[0].color        = {{0.0f, 0.0f, 0.0f, 1.0f}};
+	clear_values[0].color        = {{0.5f, 0.25f, 1.0f, 1.0f}};
 	clear_values[1].depthStencil = {0.0f, 0};
 
 	VkRenderPassBeginInfo render_pass_begin_info    = vkb::initializers::render_pass_begin_info();
@@ -450,13 +450,17 @@ void ComputeNBody::prepare_pipelines()
 
 	VkPipelineColorBlendAttachmentState blend_attachment_state =
 	    vkb::initializers::pipeline_color_blend_attachment_state(
-	        0xf,
+	        0x15,
 	        VK_FALSE);
+	
 
 	VkPipelineColorBlendStateCreateInfo color_blend_state =
 	    vkb::initializers::pipeline_color_blend_state_create_info(
 	        1,
 	        &blend_attachment_state);
+
+	 color_blend_state.logicOpEnable = VK_TRUE;
+	 color_blend_state.logicOp = VK_LOGIC_OP_OR;
 
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_state =
 	    vkb::initializers::pipeline_depth_stencil_state_create_info(
@@ -878,6 +882,14 @@ bool ComputeNBody::resize(const uint32_t width, const uint32_t height)
 	ApiVulkanSample::resize(width, height);
 	update_graphics_uniform_buffers();
 	return true;
+}
+
+void ComputeNBody::create_render_context(vkb::Platform &platform)
+{
+	auto surface_priority_list = std::vector<VkSurfaceFormatKHR>{{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+	                                                             {VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}};
+
+	render_context = platform.create_render_context(*device.get(), surface, surface_priority_list);
 }
 
 std::unique_ptr<vkb::Application> create_compute_nbody()
