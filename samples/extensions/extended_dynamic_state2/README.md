@@ -183,7 +183,7 @@ In approach above, if we would want to change patch control points number, then 
 
 However, with dynamic state 2 the number of pipelines can be reduced because of possibility to change parameters of `Depth Bias`, `Primitive Restart`, `Rasterizer Discard` and `Patch Control Points` by calling `cmdSetDepthBiasEnableEXT`, `cmdSetPrimitiveRestartEnableEXT`, `cmdSetRasterizerDiscardEnableEXT` and `cmdSetPatchControlPointsEXT` before `draw_model`.
 
-With usage of above functions we can reduce number of pipelines dramatically.
+With usage of above functions we can reduce number of pipelines.
 
 ```C+
 ...
