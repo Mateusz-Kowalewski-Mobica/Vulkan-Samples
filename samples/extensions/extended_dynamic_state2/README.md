@@ -23,7 +23,7 @@
 
 ## Overview
 
-This sample demostrates how to use `VK_EXT_extended_dynamic_state2` extension, which eliminates the need to create multiple pipelines in case of specific different parameters.
+This sample demonstrates how to use `VK_EXT_extended_dynamic_state2` extension, which eliminates the need to create multiple pipelines in case of specific different parameters.
 
 This extension changes how `Depth Bias`, `Primitive Restart`, `Rasterizer Discard` and `Patch Control Points` are managed. Instead of static description during pipeline creation, this extension allows developers to change those parameters by using a function before every draw.
 
@@ -199,7 +199,7 @@ In approach above, if we would want to change the patch control points number, t
 
 However, with 'VK_EXT_extended_dynamic_state2' the number of pipelines can be reduced by the possibility to change parameters of `Depth Bias`, `Primitive Restart`, `Rasterizer Discard` and `Patch Control Points` by calling `vkCmdSetDepthBiasEnableEXT`, `vkCmdSetPrimitiveRestartEnableEXT`, `vkCmdSetRasterizerDiscardEnableEXT` and `vkCmdSetPatchControlPointsEXT` respectively before calling `draw_model`.
 
-With the usage of above functions we can reduce number of pipelines.
+With the usage of above functions we can reduce the number of pipelines.
 
 ```C+
 ...
@@ -270,7 +270,7 @@ VkPipelineDynamicStateCreateInfo dynamic_state =
 	    static_cast<uint32_t>(dynamic_state_enables.size()),
 	    0);
 
-// Vertex bindings an attributes for model rendering
+// Vertex bindings and attributes for model rendering
 // Binding description
 std::vector<VkVertexInputBindingDescription> vertex_input_bindings = {
 	vkb::initializers::vertex_input_binding_description(0, sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX),
