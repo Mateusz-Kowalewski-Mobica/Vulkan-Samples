@@ -772,7 +772,14 @@ glm::vec4 ExtendedDynamicState2::get_changed_alpha(const vkb::sg::PBRMaterial *o
 		previous_obj_id  = gui_settings.selected_obj;
 	}
 	/* Determine if alpha need to increase or decrease */
-	rise = color.w < alpha_min ? true : false;
+	if (color.w < alpha_min)
+	{
+		rise = true;
+	}
+	else if (color.w > alpha_max)
+	{
+		rise = false;
+	}
 
 	return color;
 }
