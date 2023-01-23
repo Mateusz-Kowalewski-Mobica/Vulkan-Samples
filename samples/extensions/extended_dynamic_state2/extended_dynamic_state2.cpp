@@ -755,7 +755,7 @@ glm::vec4 ExtendedDynamicState2::get_changed_alpha(const vkb::sg::PBRMaterial *o
 	constexpr float                    alpha_step        = 0.075f;
 	constexpr float                    alpha_max         = 0.98f;
 	constexpr float                    alpha_min         = 0.3f;
-	glm::vec4						   color = original_mat->base_color_factor;
+	glm::vec4                          color = original_mat->base_color_factor;
 
 	/* Change alpha value */
 	if (gui_settings.time_tick == true)
