@@ -749,13 +749,13 @@ int ExtendedDynamicState2::get_node_index(std::string name, std::vector<SceneNod
  */
 glm::vec4 ExtendedDynamicState2::get_changed_alpha(const vkb::sg::PBRMaterial *original_mat)
 {
-	static bool                        rise              = false;
-	static int                         previous_obj_id   = gui_settings.selected_obj;
-	static float                       accumulated_diff  = 0.0f;
-	constexpr float                    alpha_step        = 0.075f;
-	constexpr float                    alpha_max         = 0.98f;
-	constexpr float                    alpha_min         = 0.3f;
-	glm::vec4                          color             = original_mat->base_color_factor;
+	static bool     rise             = false;
+	static int      previous_obj_id  = gui_settings.selected_obj;
+	static float    accumulated_diff = 0.0f;
+	constexpr float alpha_step       = 0.075f;
+	constexpr float alpha_max        = 0.98f;
+	constexpr float alpha_min        = 0.3f;
+	glm::vec4       color            = original_mat->base_color_factor;
 
 	/* Change alpha value */
 	if (gui_settings.time_tick == true)
