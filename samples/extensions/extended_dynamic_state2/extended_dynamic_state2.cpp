@@ -163,12 +163,12 @@ void ExtendedDynamicState2::update_uniform_buffers()
 {
 	/* Baseline uniform buffer */
 	ubo_baseline.projection = camera.matrices.perspective;
-	ubo_baseline.view       = camera.matrices.view * glm::mat4(1.f);
+	ubo_baseline.view       = camera.matrices.view ;
 	uniform_buffers.baseline->convert_and_update(ubo_baseline);
 
 	/* Tessellation uniform buffer */
 	ubo_tess.projection          = camera.matrices.perspective;
-	ubo_tess.modelview           = camera.matrices.view * glm::mat4(1.0f);
+	ubo_tess.modelview           = camera.matrices.view ;
 	ubo_tess.tessellation_factor = gui_settings.tess_factor;
 
 	if (!gui_settings.tessellation)
@@ -721,15 +721,8 @@ void ExtendedDynamicState2::update(float delta_time)
  */
 int ExtendedDynamicState2::get_node_index(std::string name, std::vector<SceneNode> *scene_node)
 {
-	int i = 0;
-	for (i = 0; i < scene_node->size(); i++)
-	{
-		if (scene_node->at(i).node->get_name() == name)
-		{
-			break;
-		}
-	}
-	return i;
+	return std::distance(scene_node->begin(),
+	                     std::find_if(scene_node->begin(), scene_node->end(), [&name](SceneNode const &node) { return node.node->get_name() == name; }));
 }
 
 /**
