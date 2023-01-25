@@ -382,7 +382,7 @@ void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std:
 		const auto &vertex_buffer_normal = scene_node[i].sub_mesh->vertex_buffers.at("normal");
 		auto       &index_buffer         = scene_node[i].sub_mesh->index_buffer;
 
-		if (scene_node.at(i).name != "Geosphere")
+		if (scene_node[i].name != "Geosphere")
 		{
 			vkCmdSetDepthBiasEnableEXT(command_buffer, gui_settings.objects[i].depth_bias);
 			vkCmdSetRasterizerDiscardEnableEXT(command_buffer, gui_settings.objects[i].rasterizer_discard);
