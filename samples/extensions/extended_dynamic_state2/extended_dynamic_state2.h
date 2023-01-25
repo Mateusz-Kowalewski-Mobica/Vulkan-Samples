@@ -149,7 +149,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void      create_descriptor_pool();
 	void      setup_descriptor_set_layout();
 	void      create_descriptor_sets();
-	int       get_node_index(std::string const &name, std::vector<SceneNode> const &scene_node) const;
 	glm::vec4 get_changed_alpha(const vkb::sg::PBRMaterial *original_mat);
 	void      scene_pipeline_divide(std::vector<SceneNode> const &scene_node);
 	void      draw_from_scene(VkCommandBuffer command_buffer, std::vector<SceneNode> const &scene_node);

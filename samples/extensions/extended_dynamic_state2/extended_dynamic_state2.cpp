@@ -710,16 +710,6 @@ void ExtendedDynamicState2::update(float delta_time)
 }
 
 /**
- * @fn int ExtendedDynamicState2::get_node_index(std::string const &name, std::vector<SceneNode> const &scene_node) const
- * @brief Extracting index value based on provided name (string)
- */
-int ExtendedDynamicState2::get_node_index(std::string const &name, std::vector<SceneNode> const &scene_node) const
-{
-	return std::distance(scene_node.begin(),
-	                     std::find_if(scene_node.begin(), scene_node.end(), [&name](SceneNode const &node) { return node.node->get_name() == name; }));
-}
-
-/**
  * @fn glm::vec4 ExtendedDynamicState2::get_changed_alpha(const vkb::sg::PBRMaterial *original_mat)
  * @brief Changing alpha value to create blinking effect on selected model
  * @returns Color of original_mat with changed alpha value
@@ -995,9 +985,13 @@ void ExtendedDynamicState2::cube_animation(float delta_time)
 	constexpr float move_step  = 0.0005;
 	static float    time_pass  = 0;
 	time_pass += delta_time;
-	static glm::vec3 translation = scene_elements_baseline.at(get_node_index("Cube_1", scene_elements_baseline)).node->get_transform().get_translation();
-	static float     difference  = 0;
-	static bool      rising      = true;
+	static auto &transform = std::find_if(scene_elements_baseline.begin(),
+	                                      scene_elements_baseline.end(),
+	                                      [](SceneNode const &scene_node) { return scene_node.node->get_name() == "Cube_1"; })
+	                             ->node->get_transform();
+	static auto  translation = transform.get_translation();
+	static float difference  = 0;
+	static bool  rising      = true;
 
 	/* Checking if tick time passed away */
 	if (time_pass > tick_limit)
@@ -1026,14 +1020,7 @@ void ExtendedDynamicState2::cube_animation(float delta_time)
 		time_pass = 0;
 
 		/* Write new position to object */
-		for (uint32_t i = 0; i < scene_elements_baseline.size(); i++)
-		{
-			if (scene_elements_baseline.at(i).node->get_name() == "Cube_1")
-			{
-				scene_elements_baseline.at(i).node->get_transform().set_translation(translation);
-				break;
-			}
-		}
+		transform.set_translation(translation);
 		gui_settings.time_tick = true;
 		build_command_buffers();
 	}
