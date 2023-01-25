@@ -119,13 +119,8 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		vkb::sg::Node    *node;
 		vkb::sg::SubMesh *sub_mesh;
 	};
-	std::vector<std::vector<SceneNode>> scene_nodes;
-	typedef enum
-	{
-		SCENE_ALL_OBJ_INDEX = 0,
-		SCENE_BASELINE_OBJ_INDEX,
-		SCENE_TESSELLATION_OBJ_INDEX
-	} sceneObjType_t;
+	std::vector<SceneNode> scene_elements_baseline;
+	std::vector<SceneNode> scene_elements_tess;
 
 	std::unique_ptr<vkb::sg::SubMesh> background_model;
 
@@ -156,10 +151,10 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void      create_descriptor_pool();
 	void      setup_descriptor_set_layout();
 	void      create_descriptor_sets();
-	int       get_node_index(std::string name, std::vector<SceneNode> *scene_node);
+	int       get_node_index(std::string const &name, std::vector<SceneNode> const &scene_node) const;
 	glm::vec4 get_changed_alpha(const vkb::sg::PBRMaterial *original_mat);
-	void      scene_pipeline_divide(std::vector<std::vector<SceneNode>> *scene_node);
-	void      draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, sceneObjType_t scene_index);
+	void      scene_pipeline_divide(std::vector<SceneNode> const &scene_node);
+	void      draw_from_scene(VkCommandBuffer command_buffer, std::vector<SceneNode> const &scene_node);
 	void      draw_created_model(VkCommandBuffer commandBuffer);
 	void      model_data_creation();
 	void      cube_animation(float delta_time);

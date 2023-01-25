@@ -103,10 +103,8 @@ void ExtendedDynamicState2::load_assets()
 			}
 		}
 	}
-	scene_nodes.push_back(scene_elements);
-
 	/* Split scene */
-	scene_pipeline_divide(&scene_nodes);
+	scene_pipeline_divide(scene_elements);
 
 	background_model = load_model("scenes/cube.gltf");
 	/* Load HDR cube map */
@@ -163,12 +161,12 @@ void ExtendedDynamicState2::update_uniform_buffers()
 {
 	/* Baseline uniform buffer */
 	ubo_baseline.projection = camera.matrices.perspective;
-	ubo_baseline.view       = camera.matrices.view ;
+	ubo_baseline.view       = camera.matrices.view;
 	uniform_buffers.baseline->convert_and_update(ubo_baseline);
 
 	/* Tessellation uniform buffer */
 	ubo_tess.projection          = camera.matrices.perspective;
-	ubo_tess.modelview           = camera.matrices.view ;
+	ubo_tess.modelview           = camera.matrices.view;
 	ubo_tess.tessellation_factor = gui_settings.tess_factor;
 
 	if (!gui_settings.tessellation)
@@ -416,7 +414,7 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffer, VK_FALSE);
 
 		/* Drawing objects from baseline scene (with rasterizer discard and depth bias functionality) */
-		draw_from_scene(draw_cmd_buffer, &scene_nodes, SCENE_BASELINE_OBJ_INDEX);
+		draw_from_scene(draw_cmd_buffer, scene_elements_baseline);
 
 		/* Changing topology to triangle strip with using primitive restart feature */
 		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
@@ -434,7 +432,7 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdSetPatchControlPointsEXT(draw_cmd_buffer, gui_settings.patch_control_points);
 
 		/* Drawing scene with objects using tessellation feature */
-		draw_from_scene(draw_cmd_buffer, &scene_nodes, SCENE_TESSELLATION_OBJ_INDEX);
+		draw_from_scene(draw_cmd_buffer, scene_elements_tess);
 
 		/* Changing bindings to background pipeline */
 		vkCmdBindDescriptorSets(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layouts.background, 0, 1, &descriptor_sets.background, 0, nullptr);
@@ -686,12 +684,12 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 		}
 		ImGui::Columns(2, "Name");
 		ImGui::SetColumnWidth(0, 150);
-		int                       obj_cnt = scene_nodes.at(SCENE_BASELINE_OBJ_INDEX).size();
+		int                       obj_cnt = scene_elements_baseline.size();
 		std::vector<const char *> obj_names;
 
 		for (int i = 0; i < obj_cnt; i++)
 		{
-			obj_names.push_back((scene_nodes.at(SCENE_BASELINE_OBJ_INDEX).at(i).name).c_str());
+			obj_names.push_back((scene_elements_baseline.at(i).name).c_str());
 		}
 		ImGui::ListBox("", &gui_settings.selected_obj, obj_names.data(), obj_cnt);
 		ImGui::NextColumn();
@@ -716,13 +714,13 @@ void ExtendedDynamicState2::update(float delta_time)
 }
 
 /**
- * @fn int ExtendedDynamicState2::get_node_index(std::string name, std::vector<SceneNode> *scene_node)
+ * @fn int ExtendedDynamicState2::get_node_index(std::string const &name, std::vector<SceneNode> const &scene_node) const
  * @brief Extracting index value based on provided name (string)
  */
-int ExtendedDynamicState2::get_node_index(std::string name, std::vector<SceneNode> *scene_node)
+int ExtendedDynamicState2::get_node_index(std::string const &name, std::vector<SceneNode> const &scene_node) const
 {
-	return std::distance(scene_node->begin(),
-	                     std::find_if(scene_node->begin(), scene_node->end(), [&name](SceneNode const &node) { return node.node->get_name() == name; }));
+	return std::distance(scene_node.begin(),
+	                     std::find_if(scene_node.begin(), scene_node.end(), [&name](SceneNode const &node) { return node.node->get_name() == name; }));
 }
 
 /**
@@ -768,59 +766,48 @@ glm::vec4 ExtendedDynamicState2::get_changed_alpha(const vkb::sg::PBRMaterial *o
 }
 
 /**
- * @fn void ExtendedDynamicState2::scene_pipeline_divide(std::vector<std::vector<SceneNode>> *scene_node)
+ * @fn void ExtendedDynamicState2::scene_pipeline_divide(std::vector<SceneNode> const &scene_node)
  * @brief Spliting main scene into two separate.
  * @details This operation is required to use same "draw_from_scene" function to draw models that are using different
  * 			pipelines (baseline and tessellation)
  */
-void ExtendedDynamicState2::scene_pipeline_divide(std::vector<std::vector<SceneNode>> *scene_node)
+void ExtendedDynamicState2::scene_pipeline_divide(std::vector<SceneNode> const &scene_node)
 {
-	int scene_nodes_cnt = scene_node->at(SCENE_ALL_OBJ_INDEX).size();
-
-	std::vector<SceneNode> scene_elements_baseline;
-	std::vector<SceneNode> scene_elements_tess;
-
 	/* Divide main scene to two (baseline and tessellation) */
-	for (int i = 0; i < scene_nodes_cnt; i++)
+	for (int i = 0; i < scene_node.size(); i++)
 	{
-		if (scene_node->at(SCENE_ALL_OBJ_INDEX).at(i).name == "Geosphere")
+		if (scene_node.at(i).name == "Geosphere")
 		{
-			scene_elements_tess.push_back(scene_node->at(SCENE_ALL_OBJ_INDEX).at(i));
+			scene_elements_tess.push_back(scene_node.at(i));
 		}
 		else
 		{
-			scene_elements_baseline.push_back(scene_node->at(SCENE_ALL_OBJ_INDEX).at(i));
+			scene_elements_baseline.push_back(scene_node.at(i));
 		}
 	}
-
-	scene_node->push_back(scene_elements_baseline);
-	scene_node->push_back(scene_elements_tess);
 }
 
 /**
- * @fn void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, sceneObjType_t scene_index)
+ * @fn void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<SceneNode> const &scene_node)
  * @brief Drawing all objects included to scene that is passed as argument of this function
  */
-void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<std::vector<SceneNode>> *scene_node, sceneObjType_t scene_index)
+void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<SceneNode> const &scene_node)
 {
-	auto &node               = scene_node->at(scene_index);
-	int   scene_elements_cnt = scene_node->at(scene_index).size();
-
-	for (int i = 0; i < scene_elements_cnt; i++)
+	for (int i = 0; i < scene_node.size(); i++)
 	{
-		const auto &vertex_buffer_pos    = node[i].sub_mesh->vertex_buffers.at("position");
-		const auto &vertex_buffer_normal = node[i].sub_mesh->vertex_buffers.at("normal");
-		auto       &index_buffer         = node[i].sub_mesh->index_buffer;
+		const auto &vertex_buffer_pos    = scene_node[i].sub_mesh->vertex_buffers.at("position");
+		const auto &vertex_buffer_normal = scene_node[i].sub_mesh->vertex_buffers.at("normal");
+		auto       &index_buffer         = scene_node[i].sub_mesh->index_buffer;
 
-		if (scene_index == SCENE_BASELINE_OBJ_INDEX)
+		if (scene_node.at(i).name != "Geosphere")
 		{
 			vkCmdSetDepthBiasEnableEXT(command_buffer, gui_settings.objects[i].depth_bias);
 			vkCmdSetRasterizerDiscardEnableEXT(command_buffer, gui_settings.objects[i].rasterizer_discard);
 		}
 
 		/* Pass data for the current node via push commands */
-		auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(node[i].sub_mesh->get_material());
-		push_const_block.model_matrix = node[i].node->get_transform().get_world_matrix();
+		auto node_material            = dynamic_cast<const vkb::sg::PBRMaterial *>(scene_node[i].sub_mesh->get_material());
+		push_const_block.model_matrix = scene_node[i].node->get_transform().get_world_matrix();
 		if (i != gui_settings.selected_obj ||
 		    gui_settings.selection_active == false)
 		{
@@ -835,9 +822,9 @@ void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std:
 		VkDeviceSize offsets[1] = {0};
 		vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffer_pos.get(), offsets);
 		vkCmdBindVertexBuffers(command_buffer, 1, 1, vertex_buffer_normal.get(), offsets);
-		vkCmdBindIndexBuffer(command_buffer, index_buffer->get_handle(), 0, node[i].sub_mesh->index_type);
+		vkCmdBindIndexBuffer(command_buffer, index_buffer->get_handle(), 0, scene_node[i].sub_mesh->index_type);
 
-		vkCmdDrawIndexed(command_buffer, node[i].sub_mesh->vertex_indices, 1, 0, 0, 0);
+		vkCmdDrawIndexed(command_buffer, scene_node[i].sub_mesh->vertex_indices, 1, 0, 0, 0);
 	}
 	vkCmdSetDepthBiasEnableEXT(command_buffer, VK_FALSE);
 	vkCmdSetRasterizerDiscardEnableEXT(command_buffer, VK_FALSE);
@@ -1012,7 +999,7 @@ void ExtendedDynamicState2::cube_animation(float delta_time)
 	constexpr float move_step  = 0.0005;
 	static float    time_pass  = 0;
 	time_pass += delta_time;
-	static glm::vec3 translation = scene_nodes[SCENE_BASELINE_OBJ_INDEX].at(get_node_index("Cube_1", &scene_nodes[SCENE_BASELINE_OBJ_INDEX])).node->get_transform().get_translation();
+	static glm::vec3 translation = scene_elements_baseline.at(get_node_index("Cube_1", scene_elements_baseline)).node->get_transform().get_translation();
 	static float     difference  = 0;
 	static bool      rising      = true;
 
@@ -1043,11 +1030,11 @@ void ExtendedDynamicState2::cube_animation(float delta_time)
 		time_pass = 0;
 
 		/* Write new position to object */
-		for (uint32_t i = 0; i < scene_nodes[SCENE_BASELINE_OBJ_INDEX].size(); i++)
+		for (uint32_t i = 0; i < scene_elements_baseline.size(); i++)
 		{
-			if (scene_nodes[SCENE_BASELINE_OBJ_INDEX].at(i).node->get_name() == "Cube_1")
+			if (scene_elements_baseline.at(i).node->get_name() == "Cube_1")
 			{
-				scene_nodes[SCENE_BASELINE_OBJ_INDEX].at(i).node->get_transform().set_translation(translation);
+				scene_elements_baseline.at(i).node->get_transform().set_translation(translation);
 				break;
 			}
 		}
