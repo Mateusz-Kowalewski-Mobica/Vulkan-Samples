@@ -147,6 +147,7 @@ void ExtendedDynamicState2::render(float delta_time)
  */
 void ExtendedDynamicState2::prepare_uniform_buffers()
 {
+	uniform_buffers.common      = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_common), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	uniform_buffers.baseline    = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_baseline), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	uniform_buffers.tesselation = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_tess), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	uniform_buffers.background  = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_background), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -159,9 +160,12 @@ void ExtendedDynamicState2::prepare_uniform_buffers()
  */
 void ExtendedDynamicState2::update_uniform_buffers()
 {
+	/* Common uniform buffer */
+	ubo_common.projection = camera.matrices.perspective;
+	ubo_common.view       = camera.matrices.view;
+	uniform_buffers.common->convert_and_update(ubo_common);
+
 	/* Baseline uniform buffer */
-	ubo_baseline.projection = camera.matrices.perspective;
-	ubo_baseline.view       = camera.matrices.view;
 	uniform_buffers.baseline->convert_and_update(ubo_baseline);
 
 	/* Tessellation uniform buffer */
@@ -481,9 +485,14 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 {
 	/* First descriptor set */
 	std::vector<VkDescriptorSetLayoutBinding> set_layout_bindings = {
-	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-	                                                     VK_SHADER_STAGE_VERTEX_BIT,
-	                                                     0),
+	    vkb::initializers::descriptor_set_layout_binding(
+	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	        VK_SHADER_STAGE_VERTEX_BIT,
+	        0),
+	    vkb::initializers::descriptor_set_layout_binding(
+	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	        VK_SHADER_STAGE_VERTEX_BIT,
+	        1),
 	};
 
 	VkDescriptorSetLayoutCreateInfo descriptor_layout_create_info =
@@ -558,6 +567,7 @@ void ExtendedDynamicState2::create_descriptor_sets()
 
 	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.baseline));
 
+	VkDescriptorBufferInfo matrix_common_buffer_descriptor   = create_descriptor(*uniform_buffers.common);
 	VkDescriptorBufferInfo matrix_baseline_buffer_descriptor = create_descriptor(*uniform_buffers.baseline);
 
 	std::vector<VkWriteDescriptorSet> write_descriptor_sets = {
@@ -565,6 +575,11 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	        descriptor_sets.baseline,
 	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	        0,
+	        &matrix_common_buffer_descriptor),
+	    vkb::initializers::write_descriptor_set(
+	        descriptor_sets.baseline,
+	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	        1,
 	        &matrix_baseline_buffer_descriptor)};
 
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
