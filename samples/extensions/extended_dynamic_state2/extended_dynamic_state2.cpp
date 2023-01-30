@@ -34,9 +34,10 @@ ExtendedDynamicState2::~ExtendedDynamicState2()
 {
 	if (device)
 	{
+		uniform_buffers.common.reset();
 		uniform_buffers.baseline.reset();
 		uniform_buffers.tesselation.reset();
-		uniform_buffers.background.reset();
+
 		vkDestroySampler(get_device().get_handle(), textures.envmap.sampler, VK_NULL_HANDLE);
 		textures = {};
 
@@ -150,7 +151,6 @@ void ExtendedDynamicState2::prepare_uniform_buffers()
 	uniform_buffers.common      = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_common), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	uniform_buffers.baseline    = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_baseline), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	uniform_buffers.tesselation = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_tess), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-	uniform_buffers.background  = std::make_unique<vkb::core::Buffer>(get_device(), sizeof(ubo_background), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	update_uniform_buffers();
 }
 
@@ -179,12 +179,6 @@ void ExtendedDynamicState2::update_uniform_buffers()
 		ubo_tess.tessellation_factor = 0.0f;
 	}
 	uniform_buffers.tesselation->convert_and_update(ubo_tess);
-
-	/* Background uniform buffer */
-	ubo_background.projection           = camera.matrices.perspective;
-	ubo_background.background_modelview = camera.matrices.view;
-
-	uniform_buffers.background->convert_and_update(ubo_background);
 }
 
 /**
@@ -613,7 +607,7 @@ void ExtendedDynamicState2::create_descriptor_sets()
 
 	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.background));
 
-	VkDescriptorBufferInfo matrix_background_buffer_descriptor = create_descriptor(*uniform_buffers.background);
+	VkDescriptorBufferInfo matrix_background_buffer_descriptor = create_descriptor(*uniform_buffers.common);
 	VkDescriptorImageInfo  background_image_descriptor         = create_descriptor(textures.envmap);
 
 	write_descriptor_sets = {

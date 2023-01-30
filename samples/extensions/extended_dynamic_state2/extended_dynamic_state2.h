@@ -60,13 +60,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		float     tessellation_factor = 1.0f;
 	} ubo_tess;
 
-	struct UBOBG
-	{
-		glm::mat4 projection;
-		glm::mat4 background_modelview;
-
-	} ubo_background;
-
 	VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
 
 	struct
@@ -102,7 +95,6 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		std::unique_ptr<vkb::core::Buffer> common;
 		std::unique_ptr<vkb::core::Buffer> baseline;
 		std::unique_ptr<vkb::core::Buffer> tesselation;
-		std::unique_ptr<vkb::core::Buffer> background;
 	} uniform_buffers;
 
 	struct
