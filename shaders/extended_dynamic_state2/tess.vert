@@ -22,17 +22,22 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec3 outPos;
 layout(location = 1) out vec3 outNormal;
 
-layout(set = 0, binding = 0) uniform UBO
+layout(binding = 0) uniform UBO
 {
 	mat4  projection;
-	mat4  modelview;
-	float tessellationFactor;
+	mat4  view;
 }
 ubo;
+
+layout(binding = 1) uniform UBOTessellation
+{
+	float tessellationFactor;
+}
+ubo_tessellation;
 
 void main(void)
 {
 	gl_Position = vec4(inPos, 1.0);
-	outNormal   = mat3(ubo.modelview) * inNormal;
+	outNormal   = mat3(ubo.view) * inNormal;
 	outPos      = inPos;
 }

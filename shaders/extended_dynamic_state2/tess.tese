@@ -16,13 +16,18 @@
  */
 #version 450
 
-layout(set = 0, binding = 0) uniform UBO
+layout(binding = 0) uniform UBO
 {
 	mat4  projection;
-	mat4  modelview;
-	float tessellationFactor;
+	mat4  view;
 }
 ubo;
+
+layout(binding = 1) uniform UBOTessellation
+{
+	float tessellationFactor;
+}
+ubo_tessellation;
 
 layout(push_constant) uniform Push_Constants
 {
@@ -55,5 +60,5 @@ void main()
 {
 	vec4 pos = interpolate3D(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_in[2].gl_Position);
 
-	gl_Position = ubo.projection * ubo.modelview * push_constants.model * pos;
+	gl_Position = ubo.projection * ubo.view * push_constants.model * pos;
 }

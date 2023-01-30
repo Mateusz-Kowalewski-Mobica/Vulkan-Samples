@@ -39,6 +39,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 		bool                           time_tick        = false;
 	} gui_settings;
 
+	/* Buffer used in all pipelines */
 	struct UBOCOMM
 	{
 		glm::mat4 projection;
@@ -55,9 +56,7 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	struct UBOTESS
 	{
-		glm::mat4 projection;
-		glm::mat4 modelview;
-		float     tessellation_factor = 1.0f;
+		float tessellation_factor = 1.0f;
 	} ubo_tess;
 
 	VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};

@@ -169,8 +169,6 @@ void ExtendedDynamicState2::update_uniform_buffers()
 	uniform_buffers.baseline->convert_and_update(ubo_baseline);
 
 	/* Tessellation uniform buffer */
-	ubo_tess.projection          = camera.matrices.perspective;
-	ubo_tess.modelview           = camera.matrices.view;
 	ubo_tess.tessellation_factor = gui_settings.tess_factor;
 
 	if (!gui_settings.tessellation)
@@ -512,6 +510,10 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	        VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_VERTEX_BIT,
 	        0),
+	    vkb::initializers::descriptor_set_layout_binding(
+	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	        VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+	        1),
 	};
 
 	descriptor_layout_create_info.pBindings    = set_layout_bindings.data();
@@ -576,7 +578,8 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	        1,
 	        &matrix_baseline_buffer_descriptor)};
 
-	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
+	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()),
+	                       write_descriptor_sets.data(), 0, VK_NULL_HANDLE);
 
 	/* Second descriptor set */
 	alloc_info =
@@ -594,9 +597,15 @@ void ExtendedDynamicState2::create_descriptor_sets()
 	        descriptor_sets.tesselation,
 	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	        0,
+	        &matrix_common_buffer_descriptor),
+	    vkb::initializers::write_descriptor_set(
+	        descriptor_sets.tesselation,
+	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	        1,
 	        &matrix_tess_buffer_descriptor)};
 
-	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, NULL);
+	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()),
+	                       write_descriptor_sets.data(), 0, VK_NULL_HANDLE);
 
 	/* Third descriptor set */
 	alloc_info =
@@ -607,22 +616,22 @@ void ExtendedDynamicState2::create_descriptor_sets()
 
 	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.background));
 
-	VkDescriptorBufferInfo matrix_background_buffer_descriptor = create_descriptor(*uniform_buffers.common);
-	VkDescriptorImageInfo  background_image_descriptor         = create_descriptor(textures.envmap);
+	VkDescriptorImageInfo background_image_descriptor = create_descriptor(textures.envmap);
 
 	write_descriptor_sets = {
 	    vkb::initializers::write_descriptor_set(
 	        descriptor_sets.background,
 	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	        0,
-	        &matrix_background_buffer_descriptor),
+	        &matrix_common_buffer_descriptor),
 	    vkb::initializers::write_descriptor_set(
 	        descriptor_sets.background,
 	        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 	        1,
 	        &background_image_descriptor)};
 
-	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, NULL);
+	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()),
+	                       write_descriptor_sets.data(), 0, VK_NULL_HANDLE);
 }
 
 /**
