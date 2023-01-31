@@ -16,13 +16,6 @@
  */
 #version 450
 
-layout(binding = 0) uniform UBO
-{
-	mat4  projection;
-	mat4  view;
-}
-ubo;
-
 layout(binding = 1) uniform UBOTessellation
 {
 	float tessellationFactor;

@@ -508,11 +508,11 @@ void ExtendedDynamicState2::setup_descriptor_set_layout()
 	set_layout_bindings = {
 	    vkb::initializers::descriptor_set_layout_binding(
 	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-	        VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+	        VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_VERTEX_BIT,
 	        0),
 	    vkb::initializers::descriptor_set_layout_binding(
 	        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-	        VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+	        VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 	        1),
 	};
 

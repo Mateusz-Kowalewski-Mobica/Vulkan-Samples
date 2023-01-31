@@ -29,12 +29,6 @@ layout(binding = 0) uniform UBO
 }
 ubo;
 
-layout(binding = 1) uniform UBOTessellation
-{
-	float tessellationFactor;
-}
-ubo_tessellation;
-
 void main(void)
 {
 	gl_Position = vec4(inPos, 1.0);

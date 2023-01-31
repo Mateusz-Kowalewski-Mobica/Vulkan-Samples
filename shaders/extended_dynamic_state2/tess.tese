@@ -23,12 +23,6 @@ layout(binding = 0) uniform UBO
 }
 ubo;
 
-layout(binding = 1) uniform UBOTessellation
-{
-	float tessellationFactor;
-}
-ubo_tessellation;
-
 layout(push_constant) uniform Push_Constants
 {
 	mat4 model;
