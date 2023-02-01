@@ -384,7 +384,7 @@ void ExtendedDynamicState2::build_command_buffers()
 	int i = -1; /* Required for accessing element in framebuffers vector */
 	for (auto &draw_cmd_buffer : draw_cmd_buffers)
 	{
-		i++;
+		++i;
 		auto command_begin = vkb::initializers::command_buffer_begin_info();
 		VK_CHECK(vkBeginCommandBuffer(draw_cmd_buffer, &command_begin));
 
@@ -693,7 +693,7 @@ void ExtendedDynamicState2::on_update_ui_overlay(vkb::Drawer &drawer)
 	if (drawer.header("Models"))
 	{
 		drawer.checkbox("Selection effect active", &gui_settings.selection_active);
-		int                      obj_cnt = scene_elements_baseline.size();
+		const int                obj_cnt = static_cast<int>(scene_elements_baseline.size());
 		std::vector<std::string> obj_names;
 
 		for (int i = 0; i < obj_cnt; ++i)
@@ -768,7 +768,7 @@ glm::vec4 ExtendedDynamicState2::get_changed_alpha(const vkb::sg::PBRMaterial *o
 void ExtendedDynamicState2::scene_pipeline_divide(std::vector<SceneNode> const &scene_node)
 {
 	/* Divide main scene to two (baseline and tessellation) */
-	for (int i = 0; i < scene_node.size(); i++)
+	for (int i = 0; i < scene_node.size(); ++i)
 	{
 		if (scene_node.at(i).name == "Geosphere")
 		{
@@ -787,7 +787,7 @@ void ExtendedDynamicState2::scene_pipeline_divide(std::vector<SceneNode> const &
  */
 void ExtendedDynamicState2::draw_from_scene(VkCommandBuffer command_buffer, std::vector<SceneNode> const &scene_node)
 {
-	for (int i = 0; i < scene_node.size(); i++)
+	for (int i = 0; i < scene_node.size(); ++i)
 	{
 		const auto &vertex_buffer_pos    = scene_node[i].sub_mesh->vertex_buffers.at("position");
 		const auto &vertex_buffer_normal = scene_node[i].sub_mesh->vertex_buffers.at("normal");
@@ -877,7 +877,7 @@ void ExtendedDynamicState2::model_data_creation()
 	vertices_norm[7] = glm::normalize(Xm + Yp + Zp);
 
 	/* Scaling and position transform */
-	for (uint8_t i = 0; i < vertex_count; i++)
+	for (int i = 0; i < vertex_count; ++i)
 	{
 		vertices_pos[i] *= glm::vec3(4.0f, 4.0f, 4.0f);
 		vertices_pos[i] += glm::vec3(15.0f, 2.0f, 0.0f);
@@ -987,17 +987,17 @@ void ExtendedDynamicState2::model_data_creation()
  */
 void ExtendedDynamicState2::cube_animation(float delta_time)
 {
-	constexpr float tick_limit = 0.05;
-	constexpr float delta      = 0.05;
-	constexpr float move_step  = 0.0005;
-	static float    time_pass  = 0;
+	constexpr float tick_limit = 0.05f;
+	constexpr float delta      = 0.05f;
+	constexpr float move_step  = 0.0005f;
+	static float    time_pass  = 0.0f;
 	time_pass += delta_time;
 	static auto &transform = std::find_if(scene_elements_baseline.begin(),
 	                                      scene_elements_baseline.end(),
 	                                      [](SceneNode const &scene_node) { return scene_node.node->get_name() == "Cube_1"; })
 	                             ->node->get_transform();
 	static auto  translation = transform.get_translation();
-	static float difference  = 0;
+	static float difference  = 0.0f;
 	static bool  rising      = true;
 
 	/* Checking if tick time passed away */
