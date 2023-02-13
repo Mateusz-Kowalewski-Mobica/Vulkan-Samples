@@ -19,7 +19,7 @@
 
 # Extended dynamic state 2
 
-**SCREENSHOT**
+![Sample](./images/extended_dynamic_state2_screenshot.png)
 
 ## Overview
 
