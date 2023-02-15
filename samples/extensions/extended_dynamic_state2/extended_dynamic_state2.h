@@ -122,13 +122,13 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 
 	std::unique_ptr<vkb::sg::SubMesh> background_model;
 
-	struct Cube
+	struct Model
 	{
 		std::unique_ptr<vkb::core::Buffer> vertices_pos;
 		std::unique_ptr<vkb::core::Buffer> vertices_norm;
 		std::unique_ptr<vkb::core::Buffer> indices;
 		uint32_t                           index_count;
-	} cube;
+	} cube, plane;
 
 	ExtendedDynamicState2();
 	~ExtendedDynamicState2();
@@ -153,7 +153,9 @@ class ExtendedDynamicState2 : public ApiVulkanSample
 	void      scene_pipeline_divide(std::vector<SceneNode> const &scene_node);
 	void      draw_from_scene(VkCommandBuffer command_buffer, std::vector<SceneNode> const &scene_node);
 	void      draw_created_model(VkCommandBuffer commandBuffer);
+	void      draw_created_plane_model(VkCommandBuffer commandBuffer);
 	void      model_data_creation();
+	void      quad_model_data_creation();
 	void      cube_animation(float delta_time);
 };
 

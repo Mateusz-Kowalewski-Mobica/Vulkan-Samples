@@ -76,6 +76,7 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 
 	load_assets();
 	model_data_creation();
+	quad_model_data_creation();
 	prepare_uniform_buffers();
 	create_descriptor_pool();
 	setup_descriptor_set_layout();
@@ -86,6 +87,7 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 
 	return true;
 }
+
 /**
  * 	@fn void ExtendedDynamicState2::load_assets()
  *	@brief Loading extra models, textures from assets
@@ -484,6 +486,13 @@ void ExtendedDynamicState2::build_command_buffers()
 		/* Draw model with primitive restart functionality */
 		draw_created_model(draw_cmd_buffer);
 
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffer, VK_PRIMITIVE_TOPOLOGY_PATCH_LIST);
+		vkCmdSetPrimitiveRestartEnableEXT(draw_cmd_buffer, VK_TRUE);
+		// vkCmdSetPatchControlPointsEXT(draw_cmd_buffer, patch_control_points_quads);
+
+		/* Draw model with primitive restart functionality */
+		draw_created_plane_model(draw_cmd_buffer);
+
 		/* Changing bindings to tessellation pipeline */
 		vkCmdBindDescriptorSets(draw_cmd_buffer,
 		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -502,6 +511,10 @@ void ExtendedDynamicState2::build_command_buffers()
 		/* Drawing scene with objects using tessellation feature */
 		draw_from_scene(draw_cmd_buffer, scene_elements_tess);
 
+		vkCmdSetPatchControlPointsEXT(draw_cmd_buffer, patch_control_points_quads);
+
+		draw_created_plane_model(draw_cmd_buffer);
+
 		/* Changing bindings to background pipeline */
 		vkCmdBindDescriptorSets(draw_cmd_buffer,
 		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -514,7 +527,7 @@ void ExtendedDynamicState2::build_command_buffers()
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.background);
 
 		/* Drawing background */
-		draw_model(background_model, draw_cmd_buffer);
+		// draw_model(background_model, draw_cmd_buffer);
 
 		/* UI */
 		draw_ui(draw_cmd_buffer);
@@ -948,6 +961,29 @@ void ExtendedDynamicState2::draw_created_model(VkCommandBuffer commandBuffer)
 }
 
 /**
+ * @fn void ExtendedDynamicState2::draw_created_model(VkCommandBuffer commandBuffer)
+ * @brief Drawing model created in function "model_data_creation"
+ */
+void ExtendedDynamicState2::draw_created_plane_model(VkCommandBuffer commandBuffer)
+{
+	VkDeviceSize offsets[1] = {0};
+	push_const_block.color  = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f};
+
+	/* vkCmdPushConstants - TO BE REMOVED WHEN MODEL WILL ONLY BE USED IN TESSELLATION PIPELINE */
+	vkCmdPushConstants(commandBuffer,
+	                   pipeline_layouts.baseline,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(push_const_block),
+	                   &push_const_block);
+
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, plane.vertices_pos->get(), offsets);
+	vkCmdBindVertexBuffers(commandBuffer, 1, 1, plane.vertices_norm->get(), offsets);
+	vkCmdBindIndexBuffer(commandBuffer, plane.indices->get_handle(), 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(commandBuffer, plane.index_count, 1, 0, 0, 0);
+}
+
+/**
  * @fn void ExtendedDynamicState2::model_data_creation()
  * @brief Creating model (basic cube) vertex data
  */
@@ -1079,6 +1115,126 @@ void ExtendedDynamicState2::model_data_creation()
 	    copy_command,
 	    index_staging.buffer,
 	    cube.indices->get_handle(),
+	    1,
+	    &copy_region);
+
+	device->flush_command_buffer(copy_command, queue, true);
+
+	vkDestroyBuffer(get_device().get_handle(), vertex_pos_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), vertex_pos_staging.memory, nullptr);
+	vkDestroyBuffer(get_device().get_handle(), vertex_norm_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), vertex_norm_staging.memory, nullptr);
+	vkDestroyBuffer(get_device().get_handle(), index_staging.buffer, nullptr);
+	vkFreeMemory(get_device().get_handle(), index_staging.memory, nullptr);
+}
+
+/**
+ * @fn void ExtendedDynamicState2::quad_model_data_creation()
+ * @brief Creating model (basic plane) vertex data using quads
+ */
+void ExtendedDynamicState2::quad_model_data_creation()
+{
+	/* Vertices position and normal vector of a plane made from 4 quad patches */
+	std::vector<glm::vec3> vertices_pos{
+	    {0.0f, 0.0f, 0.0f},
+	    {0.5f, 0.0f, 0.0f},
+	    {1.0f, 0.0f, 0.0f},
+	    {0.0f, 0.0f, 0.5f},
+	    {0.5f, 0.0f, 0.5f},
+	    {1.0f, 0.0f, 0.5f},
+	    {0.0f, 0.0f, 1.0f},
+	    {0.5f, 0.0f, 1.0f},
+	    {1.0f, 0.0f, 1.0f}};
+
+	std::vector<glm::vec3> vertices_norm(vertices_pos.size(), {0.0f, -1.0f, 0.0f});
+
+	/* Scaling and position transform */
+	for (auto &vertex_pos : vertices_pos)
+	{
+		vertex_pos *= glm::vec3(5.0f, 5.0f, 5.0f);
+		vertex_pos += glm::vec3(3.0f, 2.0f, 0.0f);
+	}
+
+	/* Array with vertices indexes for corresponding quad patches */
+	std::vector<uint32_t> indices{0, 1, 4, 3,
+	                              3, 4, 7, 6,
+	                              1, 2, 5, 4,
+	                              4, 5, 8, 7};
+
+	plane.index_count = static_cast<uint32_t>(indices.size());
+
+	auto vertex_buffer_size = vkb::to_u32(vertices_pos.size() * sizeof(glm::vec3));
+	auto index_buffer_size  = vkb::to_u32(indices.size() * sizeof(uint32_t));
+
+	struct
+	{
+		VkBuffer       buffer;
+		VkDeviceMemory memory;
+	} vertex_pos_staging, vertex_norm_staging, index_staging;
+
+	vertex_pos_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    vertex_buffer_size,
+	    &vertex_pos_staging.memory,
+	    vertices_pos.data());
+
+	vertex_norm_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    vertex_buffer_size,
+	    &vertex_norm_staging.memory,
+	    vertices_norm.data());
+
+	index_staging.buffer = get_device().create_buffer(
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    index_buffer_size,
+	    &index_staging.memory,
+	    indices.data());
+
+	plane.vertices_pos = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                         vertex_buffer_size,
+	                                                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+	                                                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                         VMA_MEMORY_USAGE_GPU_ONLY);
+
+	plane.vertices_norm = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                          vertex_buffer_size,
+	                                                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+	                                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                          VMA_MEMORY_USAGE_GPU_ONLY);
+
+	plane.indices = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                    index_buffer_size,
+	                                                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                                    VMA_MEMORY_USAGE_GPU_ONLY);
+
+	/* Copy from staging buffers */
+	VkCommandBuffer copy_command = device->create_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+	VkBufferCopy copy_region = {};
+
+	copy_region.size = vertex_buffer_size;
+	vkCmdCopyBuffer(
+	    copy_command,
+	    vertex_pos_staging.buffer,
+	    plane.vertices_pos->get_handle(),
+	    1,
+	    &copy_region);
+
+	vkCmdCopyBuffer(
+	    copy_command,
+	    vertex_norm_staging.buffer,
+	    plane.vertices_norm->get_handle(),
+	    1,
+	    &copy_region);
+
+	copy_region.size = index_buffer_size;
+	vkCmdCopyBuffer(
+	    copy_command,
+	    index_staging.buffer,
+	    plane.indices->get_handle(),
 	    1,
 	    &copy_region);
 
