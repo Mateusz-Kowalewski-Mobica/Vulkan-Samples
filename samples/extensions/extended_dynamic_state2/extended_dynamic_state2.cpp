@@ -513,6 +513,9 @@ void ExtendedDynamicState2::build_command_buffers()
 		                        nullptr);
 		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.background);
 
+		/* Setting topology to triangle list */
+		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
 		/* Drawing background */
 		draw_model(background_model, draw_cmd_buffer);
 
