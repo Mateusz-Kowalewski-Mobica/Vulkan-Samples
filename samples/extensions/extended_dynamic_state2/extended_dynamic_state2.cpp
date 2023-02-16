@@ -80,7 +80,7 @@ bool ExtendedDynamicState2::prepare(vkb::Platform &platform)
 	create_descriptor_pool();
 	setup_descriptor_set_layout();
 	create_descriptor_sets();
-	create_pipeline();
+	create_pipelines();
 	build_command_buffers();
 	prepared = true;
 
@@ -210,10 +210,10 @@ void ExtendedDynamicState2::update_uniform_buffers()
 }
 
 /**
- * 	@fn void ExtendedDynamicState2::create_pipeline()
+ * 	@fn void ExtendedDynamicState2::create_pipelines()
  * 	@brief Creating graphical pipelines: baseline, background, tessellation.
  */
-void ExtendedDynamicState2::create_pipeline()
+void ExtendedDynamicState2::create_pipelines()
 {
 	/* Setup for first pipeline */
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_state =
