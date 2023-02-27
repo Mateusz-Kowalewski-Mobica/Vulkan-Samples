@@ -530,10 +530,8 @@ void ExtendedDynamicState2::build_command_buffers()
  */
 void ExtendedDynamicState2::create_descriptor_pool()
 {
-	const uint32_t frames_count = static_cast<uint32_t>(draw_cmd_buffers.size());
-
 	std::vector<VkDescriptorPoolSize> pool_sizes = {
-	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frames_count * 3),
+	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 5),
 	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1),
 	};
 
