@@ -434,7 +434,6 @@ void ExtendedDynamicState2::build_command_buffers()
 	clear_values[1].depthStencil = {0.0f, 0};
 
 	constexpr uint32_t patch_control_points_triangle = 3; /* Geosphere model is based on triangle patches */
-	constexpr uint32_t patch_control_points_quads    = 4; /* Plane is based on quads */
 
 	int i = -1; /* Required for accessing element in framebuffers vector */
 	for (auto &draw_cmd_buffer : draw_cmd_buffers)
@@ -459,7 +458,21 @@ void ExtendedDynamicState2::build_command_buffers()
 		VkRect2D scissor = vkb::initializers::rect2D(static_cast<int>(width), static_cast<int>(height), 0, 0);
 		vkCmdSetScissor(draw_cmd_buffer, 0, 1, &scissor);
 
-		/* Binding baseline pipeline and descriptor sets */
+		/* Binding background pipeline and descriptor sets */
+		vkCmdBindDescriptorSets(draw_cmd_buffer,
+		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+		                        pipeline_layouts.background,
+		                        0,
+		                        1,
+		                        &descriptor_sets.background,
+		                        0,
+		                        nullptr);
+		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.background);
+
+		/* Drawing background */
+		draw_model(background_model, draw_cmd_buffer);
+
+		/* Changing bindings to baseline pipeline and descriptor sets */
 		vkCmdBindDescriptorSets(draw_cmd_buffer,
 		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
 		                        pipeline_layouts.baseline,
@@ -502,23 +515,6 @@ void ExtendedDynamicState2::build_command_buffers()
 		/* Drawing scene with objects using tessellation feature */
 		draw_from_scene(draw_cmd_buffer, scene_elements_tess);
 
-		/* Changing bindings to background pipeline */
-		vkCmdBindDescriptorSets(draw_cmd_buffer,
-		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-		                        pipeline_layouts.background,
-		                        0,
-		                        1,
-		                        &descriptor_sets.background,
-		                        0,
-		                        nullptr);
-		vkCmdBindPipeline(draw_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.background);
-
-		/* Setting topology to triangle list */
-		vkCmdSetPrimitiveTopologyEXT(draw_cmd_buffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-
-		/* Drawing background */
-		draw_model(background_model, draw_cmd_buffer);
-
 		/* UI */
 		draw_ui(draw_cmd_buffer);
 
@@ -534,8 +530,10 @@ void ExtendedDynamicState2::build_command_buffers()
  */
 void ExtendedDynamicState2::create_descriptor_pool()
 {
+	const uint32_t frame_number = static_cast<uint32_t>(draw_cmd_buffers.size());
+
 	std::vector<VkDescriptorPoolSize> pool_sizes = {
-	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3),
+	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, frame_number * 3),
 	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1),
 	};
 
